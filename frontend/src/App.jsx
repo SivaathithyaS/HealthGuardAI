@@ -49,9 +49,23 @@ export default function App() {
       ]);
 
       if (!predictRes.ok) {
+        if (predictRes.status === 422) {
+          const errData = await predictRes.json();
+          const msg = Array.isArray(errData.detail) 
+            ? errData.detail.map(d => `${d.loc[d.loc.length-1]}: ${d.msg}`).join(', ') 
+            : JSON.stringify(errData.detail);
+          throw new Error(`Validation Error: ${msg}`);
+        }
         throw new Error(`Predict API Error: ${predictRes.statusText}`);
       }
       if (!roadmapRes.ok) {
+        if (roadmapRes.status === 422) {
+          const errData = await roadmapRes.json();
+          const msg = Array.isArray(errData.detail) 
+            ? errData.detail.map(d => `${d.loc[d.loc.length-1]}: ${d.msg}`).join(', ') 
+            : JSON.stringify(errData.detail);
+          throw new Error(`Validation Error: ${msg}`);
+        }
         throw new Error(`Roadmap API Error: ${roadmapRes.statusText}`);
       }
 

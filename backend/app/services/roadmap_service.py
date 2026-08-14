@@ -65,7 +65,8 @@ def generate_roadmap(disease: str, features: dict, shap_values: dict) -> dict:
     modifiable_factors.sort(key=lambda x: x[1], reverse=True)
 
     what_if = []
-    for feat, _ in modifiable_factors[:3]:
+    used_factors = []
+    for feat, _ in modifiable_factors:
         adjusted = dict(features)
         new_val = adjusted[feat] + MODIFIABLE[feat]["improve_delta"]
         if feat == "fbs":
@@ -73,26 +74,38 @@ def generate_roadmap(disease: str, features: dict, shap_values: dict) -> dict:
         adjusted[feat] = max(new_val, 0)
 
         new_result = pred.predict(disease, adjusted)
-        what_if.append({
-            "feature": feat,
-            "label": MODIFIABLE[feat]["label"],
-            "change": f"{features[feat]} -> {adjusted[feat]}",
-            "baseline_risk": baseline_risk,
-            "new_risk_score": new_result["risk_score"],
-            "risk_reduction": round(baseline_risk - new_result["risk_score"], 4),
-        })
+        risk_reduction = round(baseline_risk - new_result["risk_score"], 4)
+        
+        if risk_reduction > 0:
+            what_if.append({
+                "feature": feat,
+                "label": MODIFIABLE[feat]["label"],
+                "change": f"{features[feat]} -> {adjusted[feat]}",
+                "baseline_risk": baseline_risk,
+                "new_risk_score": new_result["risk_score"],
+                "risk_reduction": risk_reduction,
+            })
+            used_factors.append(feat)
+            
+        if len(what_if) == 3:
+            break
 
     goals = {"short_term": [], "medium_term": [], "long_term": []}
-    for feat, _ in modifiable_factors[:3]:
+    for feat in used_factors:
         info = MODIFIABLE[feat]
         goals["short_term"].append(info["goal_short"])
         goals["medium_term"].append(info["goal_medium"])
         goals["long_term"].append(info["goal_long"])
 
-    if not modifiable_factors:
-        goals["short_term"].append(
-            "Your top risk factors are non-modifiable (age, sex, or genetic markers). "
-            "Discuss monitoring frequency with a doctor."
-        )
+    if not what_if:
+        if modifiable_factors:
+            goals["short_term"].append(
+                "Your current profile doesn't show a clear improvement path from these adjustments alone — recommend discussing options with a doctor."
+            )
+        else:
+            goals["short_term"].append(
+                "Your top risk factors are non-modifiable (age, sex, or genetic markers). "
+                "Discuss monitoring frequency with a doctor."
+            )
 
     return {"baseline_risk": baseline_risk, "what_if": what_if, "goals": goals}

@@ -1,77 +1,66 @@
-# HealthGuard AI
+# HealthGuard AI: Multi-Disease Clinical Decision Support & Prevention Platform
 
-An explainable hybrid machine learning framework for multi-disease risk prediction
-and personalized preventive healthcare.
+An explainable hybrid machine learning clinical platform for multi-disease risk prediction, automated medical lab report scanning, local SHAP explainability, and personalized prevention roadmaps.
 
-## Repo structure
+---
+
+## 🌟 Key Features
+
+1. **📄 Medical Lab Report Scanner & AI Diagnostic**
+   - Upload scanned PDF, image (OCR), or raw lab reports (CBC, CMP, Lipid Profile, Renal Function KFT, Liver Function LFT).
+   - Automatically extracts clinical biomarkers, highlights abnormal findings against reference ranges, and provides plain-English medical explanations.
+   - Routes extracted biomarkers simultaneously into 4 disease predictive models.
+
+2. **🫀 Multi-Disease Machine Learning Suite**
+   - **Cardiovascular Disease**: UCI Cleveland Soft-Voting Ensemble ($90.2\%$ accuracy, $0.952$ ROC-AUC).
+   - **Type 2 Diabetes**: Pima Indians Metabolic Ensemble ($74.0\%$ accuracy, $0.821$ ROC-AUC).
+   - **Chronic Kidney Disease (CKD)**: UCI Renal Biomarker Ensemble ($91.3\%$ accuracy, $0.983$ ROC-AUC).
+   - **Hepatic / Liver Disease**: Indian Liver Patient Dataset Ensemble ($69.2\%$ accuracy, $0.766$ ROC-AUC).
+
+3. **🔍 Explainable AI (XAI)**
+   - TreeSHAP local explainability decomposing patient log-odds into directional risk-increasing and risk-reducing clinical drivers.
+
+4. **🌱 Counterfactual Prevention Roadmap**
+   - Simulates risk reduction when modifiable biomarkers (glucose, blood pressure, cholesterol, BMI, transaminases, etc.) are optimized.
+   - Structured 3-Tier Prevention Action Plan (1–4 Weeks, 1–3 Months, 6+ Months).
+
+---
+
+## 🏗️ Architecture & Directory Layout
 
 ```
 HealthGuardAI/
-├── frontend/        React + Tailwind UI                        → Frontend
-├── backend/         FastAPI app (auth, routing, services)       → Backend
-│   └── app/
-│       ├── api/routes/     Endpoint definitions
-│       ├── core/           Config, security, JWT
-│       ├── models/         SQLAlchemy DB models
-│       ├── schemas/        Pydantic request/response schemas
-│       ├── services/       Prediction, roadmap, OCR, PDF logic  → shared: Backend + ML + Integration
-│       └── db/              DB session, migrations
-├── ml/               Datasets, notebooks, training, saved models → ML/Data
-├── docker/           Dockerfiles, docker-compose               → Integration
-├── docs/             Architecture notes, API contracts, diagrams
-└── .github/workflows/ CI (lint/test on PR)
+├── frontend/               # React 19 + Vite 6 + Tailwind/Vanilla Design System
+│   └── src/
+│       ├── App.jsx         # Multi-Tab Dashboard (Report Scanner + 4 Disease Suites)
+│       └── index.css       # Medical Theme CSS System
+├── backend/
+│   ├── app/
+│   │   ├── ml_models/      # Training scripts for all 4 disease ensembles
+│   │   ├── schemas/        # Pydantic validation models (Heart, Diabetes, CKD, Liver)
+│   │   ├── services/       # Report parser, multi-disease orchestrator, SHAP engine
+│   │   ├── routes/         # REST API route handlers (/report, /predict, /roadmap)
+│   │   └── main.py         # FastAPI application entrypoint
+│   └── data/               # Serialized ML pipeline artifacts (*_pipeline.pkl)
+└── docs/                   # System documentation & API specifications
 ```
 
-## Role → folder ownership
+---
 
-| Role | Owns | Also touches |
-|---|---|---|
-| ML/Data | `ml/` entirely | `backend/app/services/prediction_service.py`, `backend/app/services/roadmap_service.py` |
-| Backend | `backend/app/api`, `core`, `models`, `schemas`, `db` | auth, DB schema, wiring services into routes |
-| Frontend | `frontend/` entirely | `docs/api-contract.md` (consumes it) |
-| Full-stack/Integration | `docker/`, `.github/`, `backend/app/services/ocr_service.py`, `pdf_service.py` | deployment config, ties everything together |
+## 🚀 Quickstart Guide
 
-`backend/app/services/` is the seam where ML's model code gets wrapped into something
-the API can call — ML and Backend should agree early on the function signature
-(input dict → prediction + SHAP values out), documented in `docs/api-contract.md`.
-
-## Git workflow (branch-based, shared repo)
-
-We're using one shared repo with feature branches, not forks — simpler to keep in
-sync for a 4-person team with write access.
-
-1. Clone the repo once: `git clone <repo-url>`
-2. Never commit to `main` directly. Branch per feature:
-   `git checkout -b feature/<role>-<short-description>`
-   e.g. `feature/ml-heart-disease-model`, `feature/frontend-auth-page`
-3. Commit small, push often: `git push origin feature/<branch-name>`
-4. Open a Pull Request into `main`. At least one other teammate reviews before merge.
-5. Delete the branch after merge.
-
-Branch naming convention: `feature/...`, `fix/...`, `docs/...`
-
-## Getting started
-
-Backend:
-```
+### 1. Backend Server
+```bash
 cd backend
-python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload
+python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
+API Documentation: [http://localhost:8000/docs](http://localhost:8000/docs)
 
-Frontend:
-```
+### 2. Frontend Application
+```bash
 cd frontend
 npm install
 npm run dev
 ```
-
-Full stack (once Dockerfiles are filled in):
-```
-docker compose up --build
-```
-
-## Status
-
-Early scaffolding — see `docs/` for architecture and API contract as they're defined.
+Dashboard: [http://localhost:5173](http://localhost:5173)

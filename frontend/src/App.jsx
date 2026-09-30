@@ -2,8 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   FileText, Upload, Sparkles, AlertCircle, CheckCircle2, AlertTriangle, 
   TrendingDown, Zap, Heart, Activity, Stethoscope, Droplet, 
-  RefreshCw, ShieldAlert, Check, Calendar, ArrowRight, Layers, User, Award, Brain, Target, ShieldCheck, BarChart3, Database, FileCheck, GitBranch, Compass, TestTube, Users, Clock, Shield, AlertOctagon, Flame, ChevronDown, ChevronUp, Sun, Moon, CalendarDays
+  RefreshCw, ShieldAlert, Check, Calendar, ArrowRight, Layers, User, Award, Brain, Target, ShieldCheck, BarChart3, Database, FileCheck, GitBranch, Compass, TestTube, Users, Clock, Shield, AlertOctagon, Flame, ChevronDown, ChevronUp, Sun, Moon, CalendarDays, Info, Edit3, Flag, BookOpen, Eye, HelpCircle
 } from 'lucide-react';
+
+import RubricModal from './components/RubricModal';
+import SummaryView from './components/SummaryView';
+import BenchmarkHubView from './components/BenchmarkHubView';
+import ModelCardView from './components/ModelCardView';
+import AuditLogModal from './components/AuditLogModal';
+import OverrideModal from './components/OverrideModal';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -11,6 +18,28 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('universal');
   const [serverOnline, setServerOnline] = useState(false);
   
+  // Dual View Mode State: 'clinician' (default full detail) or 'summary' (streamlined)
+  const [viewMode, setViewMode] = useState(() => localStorage.getItem('healthguard_view_mode') || 'clinician');
+  
+  // Progressive Disclosure States
+  const [showAllParams, setShowAllParams] = useState(false);
+  const [showAllDiffs, setShowAllDiffs] = useState(false);
+
+  // Modal Dialog States
+  const [rubricModalData, setRubricModalData] = useState(null);
+  const [auditLogModalOpen, setAuditLogModalOpen] = useState(false);
+  const [overrideModalData, setOverrideModalData] = useState(null);
+
+  // Human-in-the-Loop Feedback Log
+  const [feedbackLog, setFeedbackLog] = useState(() => {
+    try {
+      const stored = localStorage.getItem('healthguard_feedback_log');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
   // Universal Report Scanner State
   const [pipelineStage, setPipelineStage] = useState('IDLE');
   const [clinicalText, setClinicalText] = useState('');
@@ -27,8 +56,8 @@ export default function App() {
 
   // Individual Cardiology Ensemble State
   const [heartForm, setHeartForm] = useState({
-    age: 52, sex: 1, cp: 2, trestbps: 148, chol: 238, fbs: 0,
-    restecg: 1, thalach: 145, exang: 1, oldpeak: 1.2, slope: 1, ca: 1, thal: 2
+    age: 50, sex: 1, cp: 0, trestbps: 120, chol: 200, fbs: 0,
+    restecg: 0, thalach: 150, exang: 0, oldpeak: 1.0, slope: 1, ca: 0, thal: 2
   });
   const [heartPred, setHeartPred] = useState(null);
   const [heartLoading, setHeartLoading] = useState(false);
@@ -58,7 +87,114 @@ export default function App() {
         }
       })
       .catch(() => {});
+
+    // Sync feedback history from backend
+    fetch(`${API_BASE}/api/feedback/history`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.history && data.history.length > 0) {
+          setFeedbackLog(prev => {
+            const ids = new Set(prev.map(p => p.id));
+            const merged = [...prev];
+            data.history.forEach(item => {
+              if (!ids.has(item.id)) merged.push(item);
+            });
+            localStorage.setItem('healthguard_feedback_log', JSON.stringify(merged));
+            return merged;
+          });
+        }
+      })
+      .catch(() => {});
   }, []);
+
+  const handleViewModeChange = (mode) => {
+    setViewMode(mode);
+    localStorage.setItem('healthguard_view_mode', mode);
+  };
+
+  const handleConfirmFeedback = async (diffItem) => {
+    const entry = {
+      id: `fb-${Date.now()}`,
+      case_id: analysisResult?.patient_context?.mrn || 'CASE-EXTRACTED',
+      patient_name: analysisResult?.patient_context?.name || 'Patient',
+      condition_name: diffItem.condition_name,
+      original_score: diffItem.ai_evidence_score,
+      action: 'CONFIRMED',
+      override_text: null,
+      override_reason: 'Clinician confirmed and accepted AI diagnostic finding.',
+      clinician_id: 'Dr. M. Chen, MD (Attending)',
+      timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
+    };
+
+    const updated = [entry, ...feedbackLog];
+    setFeedbackLog(updated);
+    localStorage.setItem('healthguard_feedback_log', JSON.stringify(updated));
+
+    try {
+      await fetch(`${API_BASE}/api/feedback/log`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(entry)
+      });
+    } catch (err) {
+      console.warn("Feedback sync failed (saved locally):", err);
+    }
+  };
+
+  const handleOpenOverride = (diffItem) => {
+    setOverrideModalData({
+      action: 'OVERRIDDEN',
+      diffItem,
+      patientName: analysisResult?.patient_context?.name,
+      caseId: analysisResult?.patient_context?.mrn
+    });
+  };
+
+  const handleOpenFlag = (diffItem) => {
+    setOverrideModalData({
+      action: 'FLAGGED',
+      diffItem,
+      patientName: analysisResult?.patient_context?.name,
+      caseId: analysisResult?.patient_context?.mrn
+    });
+  };
+
+  const handleCommitFeedback = async ({ action, diffItem, correctedCondition, rationale, clinicianId }) => {
+    const entry = {
+      id: `fb-${Date.now()}`,
+      case_id: analysisResult?.patient_context?.mrn || 'CASE-EXTRACTED',
+      patient_name: analysisResult?.patient_context?.name || 'Patient',
+      condition_name: diffItem.condition_name,
+      original_score: diffItem.ai_evidence_score,
+      action: action,
+      override_text: correctedCondition,
+      override_reason: rationale,
+      clinician_id: clinicianId,
+      timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
+    };
+
+    const updated = [entry, ...feedbackLog];
+    setFeedbackLog(updated);
+    localStorage.setItem('healthguard_feedback_log', JSON.stringify(updated));
+
+    try {
+      await fetch(`${API_BASE}/api/feedback/log`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(entry)
+      });
+    } catch (err) {
+      console.warn("Feedback sync failed (saved locally):", err);
+    }
+  };
+
+  const handleClearAuditLog = async () => {
+    setFeedbackLog([]);
+    localStorage.removeItem('healthguard_feedback_log');
+    try {
+      await fetch(`${API_BASE}/api/feedback/clear`, { method: 'DELETE' });
+    } catch {}
+  };
 
   const executeUniversalAnalysis = async (textToScan = clinicalText) => {
     if (!textToScan || textToScan.trim().length < 10) {
@@ -183,19 +319,59 @@ export default function App() {
           <div>
             <div style={{ display: 'flex', alignItems: 'center' }}>
               <span className="brand-title">HealthGuard AI</span>
-              <span className="brand-badge">Clinical Decision Support</span>
+              <span className="brand-badge">Clinical Decision Support v1.0</span>
             </div>
-            <p style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-              Multi-Specialty Analysis • 3-Tier Finding Hierarchy • Short & Long-Term Prevention Routines
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+              Advanced multi-specialty risk assessment powered by machine learning. Ingest reports for predictive analysis and customized reduction roadmaps.
             </p>
           </div>
         </div>
-        <div className="status-pill">
-          <span 
-            className="status-dot" 
-            style={{ background: serverOnline ? '#10b981' : '#f43f5e', boxShadow: serverOnline ? '0 0 8px #10b981' : '0 0 8px #f43f5e' }}
-          />
-          <span>{serverOnline ? 'FastAPI Backend Active' : 'Connecting to API...'}</span>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          {/* Dual View Mode Toggle */}
+          <div className="view-mode-toggle">
+            <button 
+              className={`view-mode-btn ${viewMode === 'clinician' ? 'active' : ''}`}
+              onClick={() => handleViewModeChange('clinician')}
+              title="Clinician View: Full multi-tier clinical evidence, decision trees, and parameters"
+            >
+              <Activity size={14} />
+              <span>Clinician View</span>
+            </button>
+            <button 
+              className={`view-mode-btn ${viewMode === 'summary' ? 'active' : ''}`}
+              onClick={() => handleViewModeChange('summary')}
+              title="Summary View: Streamlined executive plain-language view without jargon"
+            >
+              <Eye size={14} />
+              <span>Summary View</span>
+            </button>
+          </div>
+
+          {/* Clinician Review & Audit Trail Pill */}
+          <button 
+            className="status-pill"
+            style={{ 
+              cursor: 'pointer', 
+              background: feedbackLog.length > 0 ? 'var(--accent-forest-bg)' : 'var(--bg-subtle)', 
+              color: feedbackLog.length > 0 ? 'var(--accent-forest)' : 'var(--text-secondary)',
+              border: feedbackLog.length > 0 ? '1px solid #b7dfca' : '1px solid var(--border-subtle)'
+            }}
+            onClick={() => setAuditLogModalOpen(true)}
+            title="Open Clinician Feedback & Audit Trail"
+          >
+            <ShieldCheck size={14} />
+            <span>Audit Log ({feedbackLog.length})</span>
+          </button>
+
+          {/* Backend Status Pill */}
+          <div className="status-pill">
+            <span 
+              className="status-dot" 
+              style={{ background: serverOnline ? '#2d6a4f' : '#dc2626', boxShadow: serverOnline ? '0 0 6px #2d6a4f' : '0 0 6px #dc2626' }}
+            />
+            <span>{serverOnline ? 'Backend Active' : 'Connecting to API...'}</span>
+          </div>
         </div>
       </header>
 
@@ -206,7 +382,23 @@ export default function App() {
           onClick={() => setActiveTab('universal')}
         >
           <Compass size={16} />
-          <span>🌐 Clinical Diagnostic & Prevention Engine</span>
+          <span>🌐 Universal Report Scanner & Prevention</span>
+        </button>
+
+        <button 
+          className={`tab-button ${activeTab === 'heart' ? 'active' : ''}`}
+          onClick={() => { setActiveTab('heart'); if (!heartPred) handleHeartPredict(); }}
+        >
+          <Heart size={16} />
+          <span>🫀 Cardiology Risk Assessment</span>
+        </button>
+
+        <button 
+          className={`tab-button ${activeTab === 'diabetes' ? 'active' : ''}`}
+          onClick={() => { setActiveTab('diabetes'); if (!diabResult) handleDiabPredict(); }}
+        >
+          <Droplet size={16} />
+          <span>🩸 Diabetes Risk Assessment</span>
         </button>
 
         <button 
@@ -218,19 +410,11 @@ export default function App() {
         </button>
 
         <button 
-          className={`tab-button ${activeTab === 'heart' ? 'active' : ''}`}
-          onClick={() => { setActiveTab('heart'); if (!heartPred) handleHeartPredict(); }}
+          className={`tab-button ${activeTab === 'model-card' ? 'active' : ''}`}
+          onClick={() => setActiveTab('model-card')}
         >
-          <Heart size={16} />
-          <span>🫀 Cardiology Ensemble (UCI Cleveland)</span>
-        </button>
-
-        <button 
-          className={`tab-button ${activeTab === 'diabetes' ? 'active' : ''}`}
-          onClick={() => { setActiveTab('diabetes'); if (!diabResult) handleDiabPredict(); }}
-        >
-          <Droplet size={16} />
-          <span>🩸 Diabetes Ensemble (Pima Indians)</span>
+          <FileText size={16} />
+          <span>📑 Clinical Model Card</span>
         </button>
       </nav>
 
@@ -238,7 +422,7 @@ export default function App() {
       {/* TAB 1: UNIVERSAL MULTI-DISEASE DIAGNOSTIC & REPORT SCANNER                */}
       {/* ========================================================================= */}
       {activeTab === 'universal' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
           
           {/* ========================================================================= */}
           {/* TOP INTAKE BAR: FULL-WIDTH COMPACT CONTROLS                               */}
@@ -300,9 +484,9 @@ export default function App() {
             </div>
 
             {/* Custom Narrative Toggle */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '4px', borderTop: '1px solid var(--border-subtle)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '8px', borderTop: '1px solid var(--border-subtle)' }}>
               <button 
-                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '0.74rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}
+                style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontWeight: 600 }}
                 onClick={() => setShowCustomText(!showCustomText)}
               >
                 {showCustomText ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -310,7 +494,7 @@ export default function App() {
               </button>
 
               {pipelineStage === 'COMPLETE' && (
-                <span style={{ fontSize: '0.72rem', color: '#10b981', fontWeight: 600 }}>
+                <span style={{ fontSize: '0.76rem', color: 'var(--accent-forest)', fontWeight: 700 }}>
                   ✓ Analysis Complete & State Purged
                 </span>
               )}
@@ -331,8 +515,8 @@ export default function App() {
             )}
 
             {analysisError && (
-              <div style={{ padding: '8px 12px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '6px', color: '#fca5a5', fontSize: '0.78rem' }}>
-                <AlertCircle size={14} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
+              <div style={{ padding: '10px 14px', background: 'var(--accent-terracotta-bg)', border: '1px solid #f8c9b9', borderRadius: '8px', color: 'var(--accent-terracotta)', fontSize: '0.82rem' }}>
+                <AlertCircle size={15} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
                 {analysisError}
               </div>
             )}
@@ -342,7 +526,13 @@ export default function App() {
           {/* FULL-WIDTH OUTPUT DASHBOARD (SPANS 100% OF SCREEN)                       */}
           {/* ========================================================================= */}
           {analysisResult && (
-            <div className="dashboard-grid">
+            viewMode === 'summary' ? (
+              <SummaryView 
+                analysisResult={analysisResult}
+                onSwitchToClinicianView={() => handleViewModeChange('clinician')}
+              />
+            ) : (
+            <div className="dashboard-grid" id="clinical-full-report">
               
               {/* ========================================================================= */}
               {/* ROW 1: AI SAFETY BANNER & CONFLICTING EVIDENCE (WHEN APPLICABLE)          */}
@@ -360,7 +550,7 @@ export default function App() {
               {analysisResult.conflicting_evidence_alert && analysisResult.conflicting_evidence_alert.conflict_detected && (
                 <div className="conflicting-evidence-card">
                   <div className="conflict-header">
-                    <AlertOctagon size={18} color="#ef4444" />
+                    <AlertOctagon size={18} color="#dc2626" />
                     <span>{analysisResult.conflicting_evidence_alert.conflict_title}</span>
                   </div>
                   
@@ -389,10 +579,10 @@ export default function App() {
                 <div className="patient-profile-card">
                   <div className="patient-profile-header">
                     <div className="patient-name-large">
-                      <User size={20} color="#38bdf8" />
+                      <User size={22} color="var(--accent-primary)" />
                       <span>{analysisResult.patient_context.name}</span>
                     </div>
-                    <span style={{ fontSize: '0.72rem', background: 'rgba(56, 189, 248, 0.15)', color: '#7dd3fc', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '2px 8px', borderRadius: '999px', fontWeight: 700 }}>
+                    <span style={{ fontSize: '0.74rem', background: 'var(--accent-forest-bg)', color: 'var(--accent-forest)', border: '1px solid #b7dfca', padding: '3px 10px', borderRadius: '999px', fontWeight: 700 }}>
                       {analysisResult.detected_specialty}
                     </span>
                   </div>
@@ -421,7 +611,7 @@ export default function App() {
                     {analysisResult.patient_context.calculated_bmi && (
                       <div className="patient-stat-cell">
                         <span className="patient-stat-label">Calculated BMI</span>
-                        <span className="patient-stat-value" style={{ color: '#fde68a' }}>{analysisResult.patient_context.calculated_bmi}</span>
+                        <span className="patient-stat-value" style={{ color: 'var(--accent-terracotta)' }}>{analysisResult.patient_context.calculated_bmi}</span>
                       </div>
                     )}
 
@@ -435,27 +625,49 @@ export default function App() {
                 {/* Column 2: Primary Impression & AI Evidence Score */}
                 <div className="neuro-hero-card">
                   <div>
-                    <div className="neuro-acuity-tag" style={{ background: 'rgba(239, 68, 68, 0.25)', color: '#fca5a5' }}>
+                    <div className="neuro-acuity-tag">
                       <AlertTriangle size={13} />
                       <span>{analysisResult.acuity_level}</span>
                     </div>
                     <h2 className="neuro-diag-title">{analysisResult.primary_suspected_condition}</h2>
                     
-                    <div style={{ fontSize: '0.78rem', color: '#cbd5e1', marginTop: '6px', lineHeight: 1.45 }}>
+                    <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '8px', lineHeight: 1.5 }}>
                       <strong>Certainty:</strong> {analysisResult.diagnostic_certainty_level}
                     </div>
 
-                    <div style={{ fontSize: '0.74rem', color: '#fde68a', marginTop: '4px' }}>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--accent-terracotta)', marginTop: '6px', fontWeight: 600 }}>
                       <strong>Confirmation:</strong> {analysisResult.required_confirmation}
                     </div>
 
-                    <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '6px', fontStyle: 'italic' }}>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '8px', fontStyle: 'italic' }}>
                       {analysisResult.evidence_score_disclaimer}
                     </div>
                   </div>
 
                   <div className="neuro-metric-box">
-                    <span className="neuro-metric-val">{analysisResult.ai_evidence_score}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                      <span className="neuro-metric-val">{analysisResult.ai_evidence_score}</span>
+                      <button 
+                        className="score-info-btn"
+                        onClick={() => setRubricModalData({
+                          conditionName: analysisResult.primary_suspected_condition,
+                          score: analysisResult.ai_evidence_score,
+                          rubric: analysisResult.rubric_breakdown
+                        })}
+                        title="Click to view mathematical rubric breakdown"
+                      >
+                        ⓘ
+                      </button>
+                    </div>
+                    <div className="score-gauge-bar-bg" style={{ margin: '6px auto' }}>
+                      <div 
+                        className="score-gauge-bar-fill" 
+                        style={{ 
+                          width: `${Math.min(100, Math.max(5, analysisResult.ai_evidence_score))}%`,
+                          background: analysisResult.ai_evidence_score >= 76 ? 'var(--accent-terracotta)' : analysisResult.ai_evidence_score >= 41 ? 'var(--accent-amber)' : 'var(--accent-forest)'
+                        }}
+                      />
+                    </div>
                     <span className="neuro-metric-lbl">AI Evidence Score</span>
                   </div>
                 </div>
@@ -471,7 +683,7 @@ export default function App() {
                 <div className="glass-card">
                   <div className="card-header">
                     <div className="card-title-group">
-                      <Layers size={17} color="#38bdf8" />
+                      <Layers size={18} color="var(--accent-primary)" />
                       <div>
                         <h3 className="card-title">3-Tier Clinical Evidence Hierarchy</h3>
                         <p className="card-subtitle">Observed Finding → Interpretation → Consideration</p>
@@ -492,13 +704,13 @@ export default function App() {
                         {analysisResult.three_tier_evidence.map((tier, idx) => (
                           <tr key={idx}>
                             <td>
-                              <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '1px' }}>{tier.feature_name}</div>
-                              <div style={{ fontFamily: 'var(--font-mono)', color: '#38bdf8', fontSize: '0.74rem' }}>{tier.observed_finding}</div>
+                              <div style={{ fontWeight: 700, color: 'var(--text-title)', marginBottom: '2px' }}>{tier.feature_name}</div>
+                              <div style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-terracotta)', fontSize: '0.76rem' }}>{tier.observed_finding}</div>
                             </td>
-                            <td style={{ color: '#e2e8f0', fontSize: '0.76rem' }}>
+                            <td style={{ color: 'var(--text-primary)', fontSize: '0.8rem' }}>
                               {tier.clinical_interpretation}
                             </td>
-                            <td style={{ color: '#94a3b8', fontSize: '0.74rem' }}>
+                            <td style={{ color: 'var(--text-secondary)', fontSize: '0.78rem' }}>
                               {tier.clinical_consideration}
                             </td>
                           </tr>
@@ -512,7 +724,7 @@ export default function App() {
                 <div className="glass-card">
                   <div className="card-header">
                     <div className="card-title-group">
-                      <GitBranch size={17} color="#38bdf8" />
+                      <GitBranch size={18} color="var(--accent-primary)" />
                       <div>
                         <h3 className="card-title">Decision Node Traversal Path ("Node Points")</h3>
                         <p className="card-subtitle">Step-by-Step Split Criteria Explaining Reasoning</p>
@@ -549,12 +761,12 @@ export default function App() {
               <div className="two-col-grid">
                 
                 {/* ⚡ Short-Term Actionable Routine (Days 1–30) */}
-                <div className="glass-card" style={{ borderLeft: '3px solid #38bdf8' }}>
+                <div className="glass-card" style={{ borderLeft: '4px solid var(--accent-terracotta)' }}>
                   <div className="card-header">
                     <div className="card-title-group">
-                      <Zap size={17} color="#38bdf8" />
+                      <Zap size={18} color="var(--accent-terracotta)" />
                       <div>
-                        <h3 className="card-title" style={{ color: '#38bdf8' }}>⚡ Short-Term Actionable Routine (Days 1–30)</h3>
+                        <h3 className="card-title" style={{ color: 'var(--accent-terracotta)' }}>⚡ Short-Term Actionable Routine (Days 1–30)</h3>
                         <p className="card-subtitle">Immediate Daily & Weekly Protocols to Halt Risk Progression</p>
                       </div>
                     </div>
@@ -565,7 +777,7 @@ export default function App() {
                       <div key={idx} className="routine-step-card short-term">
                         <div className="routine-top-row">
                           <span className="routine-title">
-                            <CalendarDays size={14} color="#38bdf8" />
+                            <CalendarDays size={15} color="var(--accent-terracotta)" />
                             {step.title}
                           </span>
                           <span className="routine-time-badge cyan">{step.timeframe}</span>
@@ -580,12 +792,12 @@ export default function App() {
                 </div>
 
                 {/* 🛡️ Long-Term Disease Prevention Protocol (Months 1–6+) */}
-                <div className="glass-card" style={{ borderLeft: '3px solid #10b981' }}>
+                <div className="glass-card" style={{ borderLeft: '4px solid var(--accent-primary)' }}>
                   <div className="card-header">
                     <div className="card-title-group">
-                      <TrendingDown size={17} color="#10b981" />
+                      <TrendingDown size={18} color="var(--accent-primary)" />
                       <div>
-                        <h3 className="card-title" style={{ color: '#6ee7b7' }}>🛡️ Long-Term Prevention Protocol (Months 1–6+)</h3>
+                        <h3 className="card-title" style={{ color: 'var(--accent-primary)' }}>🛡️ Long-Term Prevention Protocol (Months 1–6+)</h3>
                         <p className="card-subtitle">Sustained Lifestyle, Surveillance & Clinical Roadmaps</p>
                       </div>
                     </div>
@@ -596,13 +808,13 @@ export default function App() {
                       <div key={idx} className="routine-step-card long-term">
                         <div className="routine-top-row">
                           <span className="routine-title">
-                            <ShieldCheck size={14} color="#10b981" />
+                            <ShieldCheck size={15} color="var(--accent-primary)" />
                             {step.title}
                           </span>
                           <span className="routine-time-badge emerald">{step.timeframe}</span>
                         </div>
                         <p className="routine-action-text">{step.action}</p>
-                        <div className="routine-goal-box" style={{ color: '#a7f3d0' }}>
+                        <div className="routine-goal-box">
                           <strong>Target Goal:</strong> {step.target_goal}
                         </div>
                       </div>
@@ -621,7 +833,7 @@ export default function App() {
                 <div className="glass-card">
                   <div className="card-header">
                     <div className="card-title-group">
-                      <Activity size={17} color="#10b981" />
+                      <Activity size={18} color="var(--accent-primary)" />
                       <div>
                         <h3 className="card-title">
                           {analysisResult.modifiable_risk_factors && analysisResult.modifiable_risk_factors.length > 0 
@@ -647,10 +859,10 @@ export default function App() {
                         <tbody>
                           {analysisResult.modifiable_risk_factors.map((rf, idx) => (
                             <tr key={idx}>
-                              <td><strong style={{ color: '#f8fafc' }}>{rf.risk_factor}</strong></td>
-                              <td style={{ fontFamily: 'var(--font-mono)', color: '#fde68a', fontWeight: 700 }}>{rf.observed_value}</td>
-                              <td style={{ color: '#cbd5e1', fontSize: '0.74rem' }}>{rf.pathophysiologic_explanation}</td>
-                              <td style={{ color: '#a7f3d0', fontSize: '0.74rem' }}>{rf.tailored_prevention_protocol}</td>
+                              <td><strong style={{ color: 'var(--text-title)' }}>{rf.risk_factor}</strong></td>
+                              <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-terracotta)', fontWeight: 700 }}>{rf.observed_value}</td>
+                              <td style={{ color: 'var(--text-primary)', fontSize: '0.78rem' }}>{rf.pathophysiologic_explanation}</td>
+                              <td style={{ color: 'var(--accent-forest)', fontSize: '0.78rem', fontWeight: 600 }}>{rf.tailored_prevention_protocol}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -668,14 +880,14 @@ export default function App() {
                         <tbody>
                           {analysisResult.extracted_parameters.map((param, idx) => (
                             <tr key={idx}>
-                              <td><strong style={{ color: 'var(--text-primary)' }}>{param.name}</strong></td>
+                              <td><strong style={{ color: 'var(--text-title)' }}>{param.name}</strong></td>
                               <td style={{ fontWeight: 700 }}>{param.value}</td>
                               <td>
                                 <span className={`param-status-badge ${param.status.toLowerCase()}`}>
                                   {param.status}
                                 </span>
                               </td>
-                              <td style={{ fontStyle: 'italic', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                              <td style={{ fontStyle: 'italic', fontSize: '0.76rem', color: 'var(--text-muted)' }}>
                                 "{param.source_text}"
                               </td>
                             </tr>
@@ -690,7 +902,7 @@ export default function App() {
                 <div className="glass-card">
                   <div className="card-header">
                     <div className="card-title-group">
-                      <Target size={17} color="#f43f5e" />
+                      <Target size={18} color="var(--accent-terracotta)" />
                       <div>
                         <h3 className="card-title">AI Differentials & Confirmatory Workup</h3>
                         <p className="card-subtitle">Secondary Considerations & Recommended Next Steps</p>
@@ -703,11 +915,11 @@ export default function App() {
                       <div key={idx} className={`diff-item ${idx === 0 ? 'primary' : ''}`}>
                         <div className="diff-top">
                           <span className="diff-name">{diff.condition_name}</span>
-                          <span className="diff-prob" style={{ color: idx === 0 ? '#f43f5e' : 'var(--text-secondary)' }}>
+                          <span className="diff-prob" style={{ color: idx === 0 ? 'var(--accent-terracotta)' : 'var(--text-secondary)' }}>
                             Evidence: {diff.ai_evidence_score}/100
                           </span>
                         </div>
-                        <div style={{ fontSize: '0.72rem', color: '#fde68a', margin: '2px 0' }}>
+                        <div style={{ fontSize: '0.76rem', color: 'var(--accent-terracotta)', margin: '3px 0', fontWeight: 600 }}>
                           Certainty: {diff.diagnostic_certainty}
                         </div>
                         <p className="diff-rationale">{diff.clinical_rationale}</p>
@@ -723,12 +935,12 @@ export default function App() {
                     {analysisResult.recommended_diagnostic_workup.map((test, idx) => (
                       <div key={idx} className="workup-card">
                         <div className="workup-top">
-                          <strong style={{ fontSize: '0.82rem', color: 'var(--text-primary)' }}>{test.test_name}</strong>
+                          <strong style={{ fontSize: '0.84rem', color: 'var(--text-title)' }}>{test.test_name}</strong>
                           <span className={`workup-urgency-pill ${test.urgency.includes('STAT') ? 'stat' : test.urgency.includes('Urgent') ? 'urgent' : 'routine'}`}>
                             {test.urgency}
                           </span>
                         </div>
-                        <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Category: {test.category} • {test.clinical_purpose}</span>
+                        <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>Category: {test.category} • {test.clinical_purpose}</span>
                       </div>
                     ))}
                   </div>
@@ -737,27 +949,318 @@ export default function App() {
               </div>
 
             </div>
+          )
+        )}
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 2: INDIVIDUAL CARDIOLOGY ENSEMBLE (SCREENSHOT THEME & LAYOUT)         */}
+      {/* ========================================================================= */}
+      {activeTab === 'heart' && (
+        <div className="two-col-grid">
+          {/* Left Column: Form Profile */}
+          <section className="glass-card">
+            <h2 className="card-title">Patient Profile</h2>
+            <p className="card-subtitle">Enter the 13 clinical features for predictive analysis.</p>
+            
+            <form onSubmit={handleHeartPredict} style={{ marginTop: '20px' }}>
+              <div className="form-grid">
+                <div className="field-group">
+                  <label className="field-label">Age</label>
+                  <input type="number" className="field-input" value={heartForm.age} onChange={e => setHeartForm({...heartForm, age: parseFloat(e.target.value)})} />
+                </div>
+                
+                <div className="field-group">
+                  <label className="field-label">Sex</label>
+                  <select className="field-input" value={heartForm.sex} onChange={e => setHeartForm({...heartForm, sex: parseInt(e.target.value)})}>
+                    <option value={1}>Male</option>
+                    <option value={0}>Female</option>
+                  </select>
+                </div>
+
+                <div className="field-group">
+                  <label className="field-label">Chest Pain Type (0-3)</label>
+                  <input type="number" className="field-input" value={heartForm.cp} onChange={e => setHeartForm({...heartForm, cp: parseInt(e.target.value)})} />
+                </div>
+
+                <div className="field-group">
+                  <label className="field-label">Resting BP (trestbps)</label>
+                  <input type="number" className="field-input" value={heartForm.trestbps} onChange={e => setHeartForm({...heartForm, trestbps: parseFloat(e.target.value)})} />
+                </div>
+
+                <div className="field-group">
+                  <label className="field-label">Cholesterol (mg/dl)</label>
+                  <input type="number" className="field-input" value={heartForm.chol} onChange={e => setHeartForm({...heartForm, chol: parseFloat(e.target.value)})} />
+                </div>
+
+                <div className="field-group">
+                  <label className="field-label">Fasting Blood Sugar &gt; 120 mg/dl</label>
+                  <select className="field-input" value={heartForm.fbs} onChange={e => setHeartForm({...heartForm, fbs: parseInt(e.target.value)})}>
+                    <option value={0}>No</option>
+                    <option value={1}>Yes</option>
+                  </select>
+                </div>
+
+                <div className="field-group">
+                  <label className="field-label">Resting ECG (0-2)</label>
+                  <input type="number" className="field-input" value={heartForm.restecg} onChange={e => setHeartForm({...heartForm, restecg: parseInt(e.target.value)})} />
+                </div>
+
+                <div className="field-group">
+                  <label className="field-label">Max Heart Rate (thalach)</label>
+                  <input type="number" className="field-input" value={heartForm.thalach} onChange={e => setHeartForm({...heartForm, thalach: parseFloat(e.target.value)})} />
+                </div>
+
+                <div className="field-group">
+                  <label className="field-label">Exercise Angina (exang)</label>
+                  <select className="field-input" value={heartForm.exang} onChange={e => setHeartForm({...heartForm, exang: parseInt(e.target.value)})}>
+                    <option value={0}>No</option>
+                    <option value={1}>Yes</option>
+                  </select>
+                </div>
+
+                <div className="field-group">
+                  <label className="field-label">ST Depression (oldpeak)</label>
+                  <input type="number" step="0.1" className="field-input" value={heartForm.oldpeak} onChange={e => setHeartForm({...heartForm, oldpeak: parseFloat(e.target.value)})} />
+                </div>
+
+                <div className="field-group">
+                  <label className="field-label">Slope (0-2)</label>
+                  <input type="number" className="field-input" value={heartForm.slope} onChange={e => setHeartForm({...heartForm, slope: parseInt(e.target.value)})} />
+                </div>
+
+                <div className="field-group">
+                  <label className="field-label">Major Vessels (ca) (0-4)</label>
+                  <input type="number" className="field-input" value={heartForm.ca} onChange={e => setHeartForm({...heartForm, ca: parseInt(e.target.value)})} />
+                </div>
+
+                <div className="field-group" style={{ gridColumn: 'span 2' }}>
+                  <label className="field-label">Thalassemia (thal) (0-3)</label>
+                  <input type="number" className="field-input" value={heartForm.thal} onChange={e => setHeartForm({...heartForm, thal: parseInt(e.target.value)})} />
+                </div>
+              </div>
+
+              <button type="submit" className="analyze-main-btn" style={{ width: '100%' }} disabled={heartLoading}>
+                {heartLoading ? 'Calculating Risk...' : 'Predict Risk'}
+              </button>
+            </form>
+          </section>
+
+          {/* Right Column: Circular Gauge, Top Factors & Roadmap */}
+          {heartPred && (
+            <section className="glass-card">
+              {/* Circular Donut Gauge */}
+              <div className="gauge-top-container">
+                <div 
+                  className="gauge-circle-wrap" 
+                  style={{ '--risk-deg': `${(heartPred.risk_percentage * 3.6)}deg` }}
+                >
+                  <div className="gauge-circle-inner">
+                    {heartPred.risk_percentage}%
+                  </div>
+                </div>
+
+                <div className="gauge-meta-wrap">
+                  <span className="gauge-risk-badge">
+                    {heartPred.risk_label}
+                  </span>
+                  <p className="gauge-risk-desc">
+                    Based on your cardiovascular profile ({heartPred.confidence_interval || '95% CI: ± 3.2%'}).
+                  </p>
+                </div>
+              </div>
+
+              {/* Top Risk Factors (Dual-Color Horizontal Split Bars) */}
+              <div style={{ marginTop: '20px' }}>
+                <h3 className="card-title" style={{ fontSize: '1.05rem', marginBottom: '2px' }}>Top Risk Factors</h3>
+                <p className="card-subtitle" style={{ marginBottom: '16px' }}>What's driving your score</p>
+
+                {heartPred.shap_factors?.slice(0, 5).map((f, i) => (
+                  <div key={i} className="shap-bar-row">
+                    <span className="shap-bar-label">{f.feature}</span>
+                    <div className="shap-bar-track">
+                      <div 
+                        className="shap-bar-fill" 
+                        style={{
+                          width: `${Math.min(100, Math.abs(f.shap_value) * 35)}%`,
+                          background: f.shap_value > 0 ? 'var(--accent-terracotta)' : 'var(--accent-forest)',
+                          left: f.shap_value > 0 ? '50%' : undefined,
+                          right: f.shap_value <= 0 ? '50%' : undefined
+                        }}
+                      />
+                    </div>
+                    <span 
+                      className="shap-bar-val"
+                      style={{ color: f.shap_value > 0 ? 'var(--accent-terracotta)' : 'var(--accent-forest)' }}
+                    >
+                      {f.shap_value > 0 ? `+${f.shap_value.toFixed(2)}` : f.shap_value.toFixed(2)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* 3-Column Risk Reduction Roadmap */}
+              <div className="roadmap-container">
+                <div className="roadmap-header-row">
+                  <div>
+                    <h3 className="card-title" style={{ fontSize: '1.05rem' }}>Risk Reduction Roadmap</h3>
+                    <p className="card-subtitle">Potential improvements based on your profile.</p>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: 'var(--text-muted)' }}>{heartForm.chol} → 170</span>
+                    <span style={{ display: 'block', fontSize: '0.76rem', color: 'var(--accent-forest)', fontWeight: 700 }}>-36% risk</span>
+                  </div>
+                </div>
+
+                <div className="roadmap-cols-grid">
+                  <div className="roadmap-col short">
+                    <div className="roadmap-col-title">SHORT TERM</div>
+                    <p className="roadmap-col-text">
+                      • Cut saturated fat intake; aim to lower cholesterol by 10-15 mg/dL in 4-6 weeks.
+                    </p>
+                  </div>
+
+                  <div className="roadmap-col medium">
+                    <div className="roadmap-col-title">MEDIUM TERM</div>
+                    <p className="roadmap-col-text">
+                      • Adopt a Mediterranean-style diet consistently for 3 months with 150 min/wk exercise.
+                    </p>
+                  </div>
+
+                  <div className="roadmap-col long">
+                    <div className="roadmap-col-title">LONG TERM</div>
+                    <p className="roadmap-col-text">
+                      • Target cholesterol under 200 mg/dL and sustained BP &lt; 120/80 within 6-12 months.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+            </section>
           )}
         </div>
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 2: LIVE BLINDED EVALUATION HUB                                       */}
+      {/* TAB 3: INDIVIDUAL DIABETES ENSEMBLE                                       */}
+      {/* ========================================================================= */}
+      {activeTab === 'diabetes' && (
+        <div className="two-col-grid">
+          <section className="glass-card">
+            <h2 className="card-title">Diabetes Metabolic Profile</h2>
+            <p className="card-subtitle">Pima Indians Dataset • Gradient Boosted Ensemble with TreeSHAP</p>
+            
+            <form onSubmit={handleDiabPredict} style={{ marginTop: '20px' }}>
+              <div className="form-grid">
+                <div className="field-group">
+                  <label className="field-label">Fasting Plasma Glucose (mg/dL)</label>
+                  <input type="number" className="field-input" value={diabForm.glucose} onChange={e => setDiabForm({...diabForm, glucose: parseFloat(e.target.value)})} />
+                </div>
+
+                <div className="field-group">
+                  <label className="field-label">Body Mass Index (BMI kg/m²)</label>
+                  <input type="number" className="field-input" step="0.1" value={diabForm.bmi} onChange={e => setDiabForm({...diabForm, bmi: parseFloat(e.target.value)})} />
+                </div>
+
+                <div className="field-group">
+                  <label className="field-label">Diastolic Blood Pressure (mm Hg)</label>
+                  <input type="number" className="field-input" value={diabForm.blood_pressure} onChange={e => setDiabForm({...diabForm, blood_pressure: parseFloat(e.target.value)})} />
+                </div>
+
+                <div className="field-group">
+                  <label className="field-label">Serum Insulin (mcU/mL)</label>
+                  <input type="number" className="field-input" value={diabForm.insulin} onChange={e => setDiabForm({...diabForm, insulin: parseFloat(e.target.value)})} />
+                </div>
+
+                <div className="field-group">
+                  <label className="field-label">Age (Years)</label>
+                  <input type="number" className="field-input" value={diabForm.age} onChange={e => setDiabForm({...diabForm, age: parseFloat(e.target.value)})} />
+                </div>
+
+                <div className="field-group">
+                  <label className="field-label">Diabetes Pedigree Function</label>
+                  <input type="number" step="0.01" className="field-input" value={diabForm.diabetes_pedigree} onChange={e => setDiabForm({...diabForm, diabetes_pedigree: parseFloat(e.target.value)})} />
+                </div>
+              </div>
+
+              <button type="submit" className="analyze-main-btn" style={{ width: '100%' }} disabled={diabLoading}>
+                {diabLoading ? 'Calculating Risk...' : 'Predict Diabetes Risk'}
+              </button>
+            </form>
+          </section>
+
+          {diabResult && (
+            <section className="glass-card">
+              <div className="gauge-top-container">
+                <div 
+                  className="gauge-circle-wrap" 
+                  style={{ '--risk-deg': `${(diabResult.risk_percentage * 3.6)}deg` }}
+                >
+                  <div className="gauge-circle-inner">
+                    {diabResult.risk_percentage}%
+                  </div>
+                </div>
+
+                <div className="gauge-meta-wrap">
+                  <span className="gauge-risk-badge">
+                    {diabResult.risk_label}
+                  </span>
+                  <p className="gauge-risk-desc">
+                    Based on metabolic biomarkers ({diabResult.confidence_interval}).
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ marginTop: '20px' }}>
+                <h3 className="card-title" style={{ fontSize: '1.05rem', marginBottom: '2px' }}>Top SHAP Attribution Drivers</h3>
+                <p className="card-subtitle" style={{ marginBottom: '16px' }}>What's driving your score</p>
+
+                {diabResult.top_positive_factors?.slice(0, 4).map((f, i) => (
+                  <div key={i} className="shap-bar-row">
+                    <span className="shap-bar-label">{f.feature_name}</span>
+                    <div className="shap-bar-track">
+                      <div 
+                        className="shap-bar-fill" 
+                        style={{
+                          width: `${Math.min(100, Math.abs(f.shap_value) * 35)}%`,
+                          background: f.shap_value > 0 ? 'var(--accent-terracotta)' : 'var(--accent-forest)',
+                          left: f.shap_value > 0 ? '50%' : undefined,
+                          right: f.shap_value <= 0 ? '50%' : undefined
+                        }}
+                      />
+                    </div>
+                    <span 
+                      className="shap-bar-val"
+                      style={{ color: f.shap_value > 0 ? 'var(--accent-terracotta)' : 'var(--accent-forest)' }}
+                    >
+                      {f.shap_value > 0 ? `+${f.shap_value.toFixed(2)}` : f.shap_value.toFixed(2)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 4: LIVE BLINDED EVALUATION HUB                                       */}
       {/* ========================================================================= */}
       {activeTab === 'evaluation' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
           <div className="glass-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
               <div>
-                <h2 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-title)', fontFamily: 'var(--font-serif)' }}>
                   Live Blinded Validation Benchmark Hub
                 </h2>
-                <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)' }}>
                   Rigorous evaluation across 10 blinded clinical validation benchmark cases (6 disease-positive, 4 hard negative controls).
                 </p>
               </div>
 
-              <button className="analyze-main-btn" style={{ width: 'auto', padding: '10px 18px' }} onClick={runEvaluationHub} disabled={evalLoading}>
+              <button className="analyze-main-btn" style={{ width: 'auto', padding: '12px 22px' }} onClick={runEvaluationHub} disabled={evalLoading}>
                 {evalLoading ? <RefreshCw className="animate-spin" size={16} /> : <BarChart3 size={16} />}
                 <span>{evalLoading ? 'Running Benchmark...' : 'Rerun Evaluation Suite'}</span>
               </button>
@@ -767,9 +1270,9 @@ export default function App() {
           {evalResults && (
             <>
               {/* Metrics Grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
-                <div className="glass-card" style={{ textAlign: 'center', padding: '16px' }}>
-                  <div style={{ fontSize: '2rem', fontWeight: 800, fontFamily: 'var(--font-mono)', color: '#10b981' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '20px' }}>
+                <div className="glass-card" style={{ textAlign: 'center', padding: '20px' }}>
+                  <div style={{ fontSize: '2.2rem', fontWeight: 800, fontFamily: 'var(--font-serif)', color: 'var(--accent-forest)' }}>
                     {(evalResults.accuracy * 100).toFixed(1)}%
                   </div>
                   <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
@@ -777,8 +1280,8 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="glass-card" style={{ textAlign: 'center', padding: '16px' }}>
-                  <div style={{ fontSize: '2rem', fontWeight: 800, fontFamily: 'var(--font-mono)', color: '#38bdf8' }}>
+                <div className="glass-card" style={{ textAlign: 'center', padding: '20px' }}>
+                  <div style={{ fontSize: '2.2rem', fontWeight: 800, fontFamily: 'var(--font-serif)', color: 'var(--accent-cyan)' }}>
                     {(evalResults.sensitivity_recall * 100).toFixed(1)}%
                   </div>
                   <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
@@ -786,8 +1289,8 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="glass-card" style={{ textAlign: 'center', padding: '16px' }}>
-                  <div style={{ fontSize: '2rem', fontWeight: 800, fontFamily: 'var(--font-mono)', color: '#a78bfa' }}>
+                <div className="glass-card" style={{ textAlign: 'center', padding: '20px' }}>
+                  <div style={{ fontSize: '2.2rem', fontWeight: 800, fontFamily: 'var(--font-serif)', color: 'var(--accent-primary)' }}>
                     {(evalResults.specificity * 100).toFixed(1)}%
                   </div>
                   <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
@@ -795,8 +1298,8 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="glass-card" style={{ textAlign: 'center', padding: '16px' }}>
-                  <div style={{ fontSize: '2rem', fontWeight: 800, fontFamily: 'var(--font-mono)', color: '#fbbf24' }}>
+                <div className="glass-card" style={{ textAlign: 'center', padding: '20px' }}>
+                  <div style={{ fontSize: '2.2rem', fontWeight: 800, fontFamily: 'var(--font-serif)', color: 'var(--accent-amber)' }}>
                     {evalResults.auroc.toFixed(3)}
                   </div>
                   <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
@@ -804,8 +1307,8 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="glass-card" style={{ textAlign: 'center', padding: '16px' }}>
-                  <div style={{ fontSize: '2rem', fontWeight: 800, fontFamily: 'var(--font-mono)', color: '#f43f5e' }}>
+                <div className="glass-card" style={{ textAlign: 'center', padding: '20px' }}>
+                  <div style={{ fontSize: '2.2rem', fontWeight: 800, fontFamily: 'var(--font-serif)', color: 'var(--accent-terracotta)' }}>
                     {evalResults.brier_score.toFixed(4)}
                   </div>
                   <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
@@ -817,29 +1320,29 @@ export default function App() {
               {/* Confusion Matrix & Case Manifest */}
               <div className="two-col-grid">
                 <div className="glass-card">
-                  <h3 style={{ fontSize: '0.95rem', fontWeight: 800, marginBottom: '14px' }}>2x2 Clinical Confusion Matrix</h3>
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: '16px', fontFamily: 'var(--font-serif)' }}>2x2 Clinical Confusion Matrix</h3>
                   <div className="cm-grid">
                     <div className="cm-cell">
-                      <div className="cm-val" style={{ color: '#10b981' }}>{evalResults.confusion_matrix.true_positive}</div>
+                      <div className="cm-val" style={{ color: 'var(--accent-forest)' }}>{evalResults.confusion_matrix.true_positive}</div>
                       <div className="cm-lbl">True Positive (TP)</div>
                     </div>
                     <div className="cm-cell">
-                      <div className="cm-val" style={{ color: '#f43f5e' }}>{evalResults.confusion_matrix.false_positive}</div>
+                      <div className="cm-val" style={{ color: 'var(--accent-terracotta)' }}>{evalResults.confusion_matrix.false_positive}</div>
                       <div className="cm-lbl">False Positive (FP)</div>
                     </div>
                     <div className="cm-cell">
-                      <div className="cm-val" style={{ color: '#f43f5e' }}>{evalResults.confusion_matrix.false_negative}</div>
+                      <div className="cm-val" style={{ color: 'var(--accent-terracotta)' }}>{evalResults.confusion_matrix.false_negative}</div>
                       <div className="cm-lbl">False Negative (FN)</div>
                     </div>
                     <div className="cm-cell">
-                      <div className="cm-val" style={{ color: '#38bdf8' }}>{evalResults.confusion_matrix.true_negative}</div>
+                      <div className="cm-val" style={{ color: 'var(--accent-forest)' }}>{evalResults.confusion_matrix.true_negative}</div>
                       <div className="cm-lbl">True Negative (TN)</div>
                     </div>
                   </div>
                 </div>
 
                 <div className="glass-card">
-                  <h3 style={{ fontSize: '0.95rem', fontWeight: 800, marginBottom: '14px' }}>Evaluated Benchmark Manifest</h3>
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: '16px', fontFamily: 'var(--font-serif)' }}>Evaluated Benchmark Manifest</h3>
                   <div className="params-table-container">
                     <table className="eval-table">
                       <thead>
@@ -855,15 +1358,15 @@ export default function App() {
                         {evalResults.evaluated_cases.map(c => (
                           <tr key={c.case_id}>
                             <td><strong>{c.case_id}</strong></td>
-                            <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem' }}>{c.modality}</td>
+                            <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>{c.modality}</td>
                             <td>{c.predicted_label}</td>
                             <td style={{ fontFamily: 'var(--font-mono)' }}>{c.model_score}</td>
                             <td>
                               <span 
                                 style={{ 
-                                  padding: '2px 6px', borderRadius: '4px', fontSize: '0.68rem', fontWeight: 700,
-                                  background: c.match_status.startsWith('CORRECT') ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
-                                  color: c.match_status.startsWith('CORRECT') ? '#6ee7b7' : '#fca5a5'
+                                  padding: '3px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700,
+                                  background: c.match_status.startsWith('CORRECT') ? 'var(--accent-forest-bg)' : 'var(--accent-terracotta-bg)',
+                                  color: c.match_status.startsWith('CORRECT') ? 'var(--accent-forest)' : 'var(--accent-terracotta)'
                                 }}
                               >
                                 {c.match_status}
@@ -877,140 +1380,6 @@ export default function App() {
                 </div>
               </div>
             </>
-          )}
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* TAB 3: INDIVIDUAL CARDIOLOGY ENSEMBLE                                     */}
-      {/* ========================================================================= */}
-      {activeTab === 'heart' && (
-        <div className="two-col-grid">
-          <section className="glass-card">
-            <h2 className="card-title">Cardiology & Hemodynamics Ensemble</h2>
-            <p className="card-subtitle">UCI Cleveland Dataset • Soft-Voting Ensemble (RandomForest + GradientBoosting)</p>
-            <form onSubmit={handleHeartPredict} style={{ marginTop: '16px' }}>
-              <div className="form-grid">
-                <div className="field-group">
-                  <label className="field-label">Age</label>
-                  <input type="number" className="field-input" value={heartForm.age} onChange={e => setHeartForm({...heartForm, age: parseFloat(e.target.value)})} />
-                </div>
-                <div className="field-group">
-                  <label className="field-label">Resting Blood Pressure (mm Hg)</label>
-                  <input type="number" className="field-input" value={heartForm.trestbps} onChange={e => setHeartForm({...heartForm, trestbps: parseFloat(e.target.value)})} />
-                </div>
-                <div className="field-group">
-                  <label className="field-label">Serum Cholesterol (mg/dL)</label>
-                  <input type="number" className="field-input" value={heartForm.chol} onChange={e => setHeartForm({...heartForm, chol: parseFloat(e.target.value)})} />
-                </div>
-                <div className="field-group">
-                  <label className="field-label">Maximum Heart Rate (bpm)</label>
-                  <input type="number" className="field-input" value={heartForm.thalach} onChange={e => setHeartForm({...heartForm, thalach: parseFloat(e.target.value)})} />
-                </div>
-                <div className="field-group">
-                  <label className="field-label">Chest Pain Type (0-3)</label>
-                  <input type="number" className="field-input" value={heartForm.cp} onChange={e => setHeartForm({...heartForm, cp: parseInt(e.target.value)})} />
-                </div>
-                <div className="field-group">
-                  <label className="field-label">ST Depression (oldpeak)</label>
-                  <input type="number" step="0.1" className="field-input" value={heartForm.oldpeak} onChange={e => setHeartForm({...heartForm, oldpeak: parseFloat(e.target.value)})} />
-                </div>
-              </div>
-              <button type="submit" className="analyze-main-btn" disabled={heartLoading}>
-                {heartLoading ? 'Calculating Risk...' : 'Evaluate Cardiology Model'}
-              </button>
-            </form>
-          </section>
-
-          {heartPred && (
-            <section className="glass-card">
-              <div style={{ fontSize: '2.2rem', fontWeight: 800, color: heartPred.risk_color, fontFamily: 'var(--font-mono)' }}>
-                {heartPred.risk_percentage}%
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 0 12px' }}>
-                <span style={{ padding: '3px 10px', borderRadius: '999px', background: `${heartPred.risk_color}25`, color: heartPred.risk_color, fontSize: '0.8rem', fontWeight: 800 }}>
-                  {heartPred.risk_label}
-                </span>
-                <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>{heartPred.confidence_interval || '95% CI: ± 3.2%'}</span>
-              </div>
-              
-              <h4 style={{ fontSize: '0.85rem', fontWeight: 700, margin: '14px 0 8px' }}>Top SHAP Attribution Drivers</h4>
-              {heartPred.top_positive_factors?.slice(0, 4).map((f, i) => (
-                <div key={i} className="shap-item">
-                  <div style={{ fontSize: '0.8rem', fontWeight: 700 }}>{f.feature_name}</div>
-                  <div style={{ fontFamily: 'var(--font-mono)', color: f.shap_value > 0 ? '#f43f5e' : '#10b981' }}>
-                    {f.shap_value > 0 ? `+${f.shap_value.toFixed(2)}` : f.shap_value.toFixed(2)}
-                  </div>
-                </div>
-              ))}
-            </section>
-          )}
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* TAB 4: INDIVIDUAL DIABETES ENSEMBLE                                       */}
-      {/* ========================================================================= */}
-      {activeTab === 'diabetes' && (
-        <div className="two-col-grid">
-          <section className="glass-card">
-            <h2 className="card-title">Diabetes Screening Ensemble</h2>
-            <p className="card-subtitle">Pima Indians Dataset • Gradient Boosted Ensemble with TreeSHAP</p>
-            <form onSubmit={handleDiabPredict} style={{ marginTop: '16px' }}>
-              <div className="form-grid">
-                <div className="field-group">
-                  <label className="field-label">Fasting Plasma Glucose (mg/dL)</label>
-                  <input type="number" className="field-input" value={diabForm.glucose} onChange={e => setDiabForm({...diabForm, glucose: parseFloat(e.target.value)})} />
-                </div>
-                <div className="field-group">
-                  <label className="field-label">Body Mass Index (BMI kg/m²)</label>
-                  <input type="number" className="field-input" step="0.1" value={diabForm.bmi} onChange={e => setDiabForm({...diabForm, bmi: parseFloat(e.target.value)})} />
-                </div>
-                <div className="field-group">
-                  <label className="field-label">Diastolic Blood Pressure (mm Hg)</label>
-                  <input type="number" className="field-input" value={diabForm.blood_pressure} onChange={e => setDiabForm({...diabForm, blood_pressure: parseFloat(e.target.value)})} />
-                </div>
-                <div className="field-group">
-                  <label className="field-label">Serum Insulin (mcU/mL)</label>
-                  <input type="number" className="field-input" value={diabForm.insulin} onChange={e => setDiabForm({...diabForm, insulin: parseFloat(e.target.value)})} />
-                </div>
-                <div className="field-group">
-                  <label className="field-label">Age (Years)</label>
-                  <input type="number" className="field-input" value={diabForm.age} onChange={e => setDiabForm({...diabForm, age: parseFloat(e.target.value)})} />
-                </div>
-                <div className="field-group">
-                  <label className="field-label">Diabetes Pedigree Function</label>
-                  <input type="number" step="0.01" className="field-input" value={diabForm.diabetes_pedigree} onChange={e => setDiabForm({...diabForm, diabetes_pedigree: parseFloat(e.target.value)})} />
-                </div>
-              </div>
-              <button type="submit" className="analyze-main-btn" disabled={diabLoading}>
-                {diabLoading ? 'Calculating Risk...' : 'Evaluate Diabetes Model'}
-              </button>
-            </form>
-          </section>
-
-          {diabResult && (
-            <section className="glass-card">
-              <div style={{ fontSize: '2.2rem', fontWeight: 800, color: diabResult.risk_color, fontFamily: 'var(--font-mono)' }}>
-                {diabResult.risk_percentage}%
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 0 12px' }}>
-                <span style={{ padding: '3px 10px', borderRadius: '999px', background: `${diabResult.risk_color}25`, color: diabResult.risk_color, fontSize: '0.8rem', fontWeight: 800 }}>
-                  {diabResult.risk_label}
-                </span>
-                <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>{diabResult.confidence_interval}</span>
-              </div>
-              
-              <h4 style={{ fontSize: '0.85rem', fontWeight: 700, margin: '14px 0 8px' }}>Top SHAP Attribution Drivers</h4>
-              {diabResult.top_positive_factors?.slice(0, 4).map((f, i) => (
-                <div key={i} className="shap-item">
-                  <div style={{ fontSize: '0.8rem', fontWeight: 700 }}>{f.feature_name}</div>
-                  <div style={{ fontFamily: 'var(--font-mono)', color: f.shap_value > 0 ? '#f43f5e' : '#10b981' }}>
-                    {f.shap_value > 0 ? `+${f.shap_value.toFixed(2)}` : f.shap_value.toFixed(2)}
-                  </div>
-                </div>
-              ))}
-            </section>
           )}
         </div>
       )}

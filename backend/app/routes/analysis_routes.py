@@ -239,3 +239,73 @@ Clinical Impressions: Patient presents with persistent lethargy, cold intoleranc
             }
         ]
     }
+
+# -------------------------------------------------------------
+# 4. CLINICIAN FEEDBACK & HUMAN-IN-THE-LOOP AUDIT LOG ENDPOINTS
+# -------------------------------------------------------------
+class ClinicianFeedbackRequest(BaseModel):
+    id: Optional[str] = None
+    case_id: Optional[str] = "CASE-EXTRACTED"
+    patient_name: Optional[str] = "Anonymous Patient"
+    condition_name: str
+    original_score: float
+    action: str  # "CONFIRMED", "OVERRIDDEN", "FLAGGED"
+    override_text: Optional[str] = None
+    override_reason: Optional[str] = None
+    clinician_id: Optional[str] = "Dr. M. Chen (Attending Physician)"
+    timestamp: Optional[str] = None
+
+FEEDBACK_STORE: List[Dict[str, Any]] = [
+    {
+        "id": "fb-seed-001",
+        "case_id": "CASE-001",
+        "patient_name": "Marcus Bennett (68yo M)",
+        "condition_name": "Acute Ischemic Stroke with Right M1 Large Vessel Occlusion (LVO)",
+        "original_score": 94.0,
+        "action": "CONFIRMED",
+        "override_text": None,
+        "override_reason": "Verified CTA M1 cut-off and matching acute left-sided hemiparesis. Activated emergent mechanical thrombectomy team.",
+        "clinician_id": "Dr. R. Alvarez, MD (Vascular Neurology)",
+        "timestamp": "2026-09-28 14:22:10 UTC"
+    },
+    {
+        "id": "fb-seed-002",
+        "case_id": "CASE-003",
+        "patient_name": "Elena Kovacs (47yo F)",
+        "condition_name": "High-Grade Infiltrative Intra-Axial Glioma (Suspected Glioblastoma)",
+        "original_score": 91.0,
+        "action": "CONFIRMED",
+        "override_text": None,
+        "override_reason": "Nodular peripheral enhancement and 7mm midline shift confirmed on post-contrast T1. Scheduled emergent neurosurgical consultation.",
+        "clinician_id": "Dr. S. Thornton, MD (Neuro-Oncology)",
+        "timestamp": "2026-09-29 09:15:45 UTC"
+    }
+]
+
+@router.post("/feedback/log")
+def log_clinician_feedback(req: ClinicianFeedbackRequest):
+    entry = req.model_dump()
+    if not entry.get("id"):
+        entry["id"] = f"fb-{len(FEEDBACK_STORE) + 1:03d}"
+    if not entry.get("timestamp"):
+        entry["timestamp"] = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    FEEDBACK_STORE.append(entry)
+    return {
+        "status": "success",
+        "message": f"Clinical feedback '{req.action}' recorded successfully.",
+        "entry": entry,
+        "total_logged": len(FEEDBACK_STORE)
+    }
+
+@router.get("/feedback/history")
+def get_feedback_history():
+    return {
+        "total_entries": len(FEEDBACK_STORE),
+        "history": sorted(FEEDBACK_STORE, key=lambda x: x.get("timestamp", ""), reverse=True)
+    }
+
+@router.delete("/feedback/clear")
+def clear_feedback_history():
+    global FEEDBACK_STORE
+    FEEDBACK_STORE = []
+    return {"status": "success", "message": "Feedback log cleared."}

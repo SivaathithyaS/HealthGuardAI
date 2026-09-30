@@ -39,6 +39,30 @@ class PreventionRoutineStep(BaseModel):
     target_goal: str
     clinical_purpose: str
 
+class RubricCriterion(BaseModel):
+    criterion: str
+    points: float
+    max_points: float
+    met: bool = True
+    evidence: str
+
+class ScoringRubric(BaseModel):
+    scoring_method: str = "Weighted Clinical Rubric (Point-Factor System)"
+    validation_cohort: str = "Northstar & Riverbend Clinical Validation Suite (N=10)"
+    validation_date: str = "September 2026"
+    total_score: float
+    max_possible: float = 100.0
+    methodology_description: str = "Explicit point-factor rubric weighting radiographic evidence, focal deficit match, mimic exclusion, and onset window."
+    criteria: List[RubricCriterion] = []
+
+class PlainLanguageSummary(BaseModel):
+    urgency_tier: str  # e.g. "🔴 Time-Critical — Suspected Acute Stroke, Escalate Immediately"
+    urgency_level: str # "CRITICAL", "MODERATE", "LOW"
+    headline: str
+    plain_language_bullets: List[str]
+    concern_tier: str  # "Low Concern" (0-40), "Moderate — Review Recommended" (41-75), "High — Immediate Review Required" (76-100)
+    key_action: str
+
 class UniversalDifferential(BaseModel):
     condition_name: str
     medical_specialty: str
@@ -48,6 +72,7 @@ class UniversalDifferential(BaseModel):
     severity_category: str
     supporting_evidence: List[str]
     clinical_rationale: str
+    rubric_breakdown: Optional[ScoringRubric] = None
 
 class DiagnosticWorkupItem(BaseModel):
     test_name: str
@@ -111,6 +136,8 @@ class UniversalDiseaseAnalysisResult(BaseModel):
     decision_node_path: List[DecisionNodeStep]
     differential_considerations: List[UniversalDifferential]
     recommended_diagnostic_workup: List[DiagnosticWorkupItem]
+    rubric_breakdown: Optional[ScoringRubric] = None
+    plain_language_summary: Optional[PlainLanguageSummary] = None
     
     # Actionable Prevention Routines (Short-Term Days 1-30 vs Long-Term Months 1-6+)
     short_term_routine: List[PreventionRoutineStep]

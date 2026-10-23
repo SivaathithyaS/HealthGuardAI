@@ -120,7 +120,7 @@ class MultiDiseaseService:
             ctx.log_event("EXECUTION_COMPLETE", "Neurovascular stroke extraction and differential completed.")
 
             summary = (
-                f"AI Clinical Screening Result: 🚨 TIME-CRITICAL NEUROVASCULAR EMERGENCY. "
+                f"AI Clinical Screening Result: TIME-CRITICAL NEUROVASCULAR EMERGENCY. "
                 f"Findings are highly concerning for Acute Ischemic Stroke in the Right MCA territory "
                 f"associated with an abrupt Right M1 segment Large Vessel Occlusion (LVO) (Model Score: {stroke_res.model_score}/100). "
                 f"No acute intracranial hemorrhage identified. Immediate stroke team activation and mechanical thrombectomy evaluation recommended."

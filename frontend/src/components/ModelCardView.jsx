@@ -152,9 +152,9 @@ export default function ModelCardView({ onNavigateToBenchmark }) {
               To eliminate closed-loop AI safety risks, HealthGuard AI integrates a persistent <strong>Human-in-the-Loop (HITL) confirmation and override mechanism</strong> on every differential diagnosis and recommendation card:
             </p>
             <ul style={{ paddingLeft: '22px', marginTop: '8px', lineHeight: 1.6 }}>
-              <li><strong>✅ Clinician Confirmation:</strong> Formally logs attending physician verification of model findings.</li>
-              <li><strong>✏️ Clinician Override:</strong> Permits the clinician to replace the AI impression with a corrected differential diagnosis, clinical rationale, and physician signature.</li>
-              <li><strong>🚩 Flag as Incorrect:</strong> Records suspected artifacts, false positive extractions, or discordant recommendations.</li>
+              <li><strong>Clinician Confirmation:</strong> Formally logs attending physician verification of model findings.</li>
+              <li><strong>Clinician Override:</strong> Permits the clinician to replace the AI impression with a corrected differential diagnosis, clinical rationale, and physician signature.</li>
+              <li><strong>Flag as Incorrect:</strong> Records suspected artifacts, false positive extractions, or discordant recommendations.</li>
             </ul>
             <p style={{ marginTop: '10px' }}>
               <strong>Retraining & Active Learning Pipeline:</strong> In a production hospital deployment, all confirmed, overridden, and flagged cases are structured into an automated audit stream. Overridden and flagged cases are automatically queued for monthly retraining and threshold recalibration:

@@ -44,7 +44,6 @@ export default function App() {
   const [pipelineStage, setPipelineStage] = useState('IDLE');
   const [clinicalText, setClinicalText] = useState('');
   const [selectedPresetId, setSelectedPresetId] = useState('sample-3-stroke');
-  const [showCustomText, setShowCustomText] = useState(false);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [analysisError, setAnalysisError] = useState(null);
   const [sampleReports, setSampleReports] = useState([]);
@@ -314,7 +313,7 @@ export default function App() {
       <header className="navbar">
         <div className="brand">
           <div className="brand-icon">
-            <Compass size={22} />
+            <Shield size={20} strokeWidth={1.5} />
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -335,7 +334,7 @@ export default function App() {
               onClick={() => handleViewModeChange('clinician')}
               title="Clinician View: Full multi-tier clinical evidence, decision trees, and parameters"
             >
-              <Activity size={14} />
+              <Activity size={14} strokeWidth={1.5} />
               <span>Clinician View</span>
             </button>
             <button 
@@ -343,7 +342,7 @@ export default function App() {
               onClick={() => handleViewModeChange('summary')}
               title="Summary View: Streamlined executive plain-language view without jargon"
             >
-              <Eye size={14} />
+              <Eye size={14} strokeWidth={1.5} />
               <span>Summary View</span>
             </button>
           </div>
@@ -351,70 +350,65 @@ export default function App() {
           {/* Clinician Review & Audit Trail Pill */}
           <button 
             className="status-pill"
-            style={{ 
-              cursor: 'pointer', 
-              background: feedbackLog.length > 0 ? 'var(--accent-forest-bg)' : 'var(--bg-subtle)', 
-              color: feedbackLog.length > 0 ? 'var(--accent-forest)' : 'var(--text-secondary)',
-              border: feedbackLog.length > 0 ? '1px solid #b7dfca' : '1px solid var(--border-subtle)'
-            }}
+            style={{ cursor: 'pointer' }}
             onClick={() => setAuditLogModalOpen(true)}
             title="Open Clinician Feedback & Audit Trail"
           >
-            <ShieldCheck size={14} />
+            <ShieldCheck size={14} strokeWidth={1.5} />
             <span>Audit Log ({feedbackLog.length})</span>
           </button>
 
           {/* Backend Status Pill */}
-          <div className="status-pill">
+          <div className={`status-pill ${serverOnline ? 'nominal' : ''}`}>
             <span 
               className="status-dot" 
-              style={{ background: serverOnline ? '#2d6a4f' : '#dc2626', boxShadow: serverOnline ? '0 0 6px #2d6a4f' : '0 0 6px #dc2626' }}
+              style={{ background: serverOnline ? 'var(--good-accent)' : 'var(--critical-accent)' }}
             />
-            <span>{serverOnline ? 'Backend Active' : 'Connecting to API...'}</span>
+            <span>{serverOnline ? 'System nominal' : 'Offline'}</span>
           </div>
         </div>
       </header>
 
-      {/* Navigation Tabs */}
+      {/* Secondary Navigation (Underline Tabs, No Emoji) */}
       <nav className="tabs-header">
         <button 
           className={`tab-button ${activeTab === 'universal' ? 'active' : ''}`}
           onClick={() => setActiveTab('universal')}
         >
-          <Compass size={16} />
-          <span>🌐 Universal Report Scanner & Prevention</span>
+          <FileText size={15} strokeWidth={1.5} />
+          <span>Universal Report Scanner & Prevention</span>
         </button>
 
         <button 
           className={`tab-button ${activeTab === 'heart' ? 'active' : ''}`}
           onClick={() => { setActiveTab('heart'); if (!heartPred) handleHeartPredict(); }}
         >
-          <Heart size={16} />
-          <span>🫀 Cardiology Risk Assessment</span>
+          <Heart size={15} strokeWidth={1.5} />
+          <span>Cardiology Risk Assessment</span>
         </button>
 
         <button 
           className={`tab-button ${activeTab === 'diabetes' ? 'active' : ''}`}
           onClick={() => { setActiveTab('diabetes'); if (!diabResult) handleDiabPredict(); }}
         >
-          <Droplet size={16} />
-          <span>🩸 Diabetes Risk Assessment</span>
+          <Droplet size={15} strokeWidth={1.5} />
+          <span>Diabetes Risk Assessment</span>
         </button>
 
         <button 
           className={`tab-button ${activeTab === 'evaluation' ? 'active' : ''}`}
           onClick={() => { setActiveTab('evaluation'); if (!evalResults) runEvaluationHub(); }}
         >
-          <BarChart3 size={16} />
-          <span>📊 Live Validation Benchmark Hub</span>
+          <BarChart3 size={15} strokeWidth={1.5} />
+          <span>Live Validation Benchmark Hub</span>
         </button>
 
         <button 
           className={`tab-button ${activeTab === 'model-card' ? 'active' : ''}`}
           onClick={() => setActiveTab('model-card')}
         >
-          <FileText size={16} />
-          <span>📑 Clinical Model Card</span>
+          <BookOpen size={15} strokeWidth={1.5} />
+          <span>Clinical Model Card</span>
         </button>
       </nav>
 
@@ -457,7 +451,9 @@ export default function App() {
                       executeUniversalAnalysis(sample.text);
                     }}
                   >
-                    <span className="preset-chip-title">{sample.title.split('—')[0]}</span>
+                    <span className="preset-chip-title">
+                      {sample.title.replace(/^[^\w\s]+/, '').trim().split('—')[0]}
+                    </span>
                     <span className="preset-chip-sub">{sample.specialty}</span>
                   </button>
                 ))}
@@ -471,51 +467,20 @@ export default function App() {
               >
                 {['CLASSIFYING', 'EXTRACTING', 'TRAVERSING_NODES'].includes(pipelineStage) ? (
                   <>
-                    <RefreshCw className="animate-spin" size={16} />
+                    <RefreshCw className="animate-spin" size={15} strokeWidth={1.5} />
                     <span>Analyzing...</span>
                   </>
                 ) : (
                   <>
-                    <Sparkles size={16} />
+                    <Sparkles size={15} strokeWidth={1.5} />
                     <span>Run Analysis</span>
                   </>
                 )}
               </button>
             </div>
 
-            {/* Custom Narrative Toggle */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '8px', borderTop: '1px solid var(--border-subtle)' }}>
-              <button 
-                style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontWeight: 600 }}
-                onClick={() => setShowCustomText(!showCustomText)}
-              >
-                {showCustomText ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                <span>{showCustomText ? 'Hide Clinical Text Editor' : 'Paste Custom Clinical Text / Lab Values / Symptoms'}</span>
-              </button>
-
-              {pipelineStage === 'COMPLETE' && (
-                <span style={{ fontSize: '0.76rem', color: 'var(--accent-forest)', fontWeight: 700 }}>
-                  ✓ Analysis Complete & State Purged
-                </span>
-              )}
-            </div>
-
-            {showCustomText && (
-              <div className="intake-text-expand">
-                <textarea
-                  className="report-textarea"
-                  value={clinicalText}
-                  onChange={e => {
-                    setClinicalText(e.target.value);
-                    setSelectedPresetId('');
-                  }}
-                  placeholder="Paste or type clinical text: e.g. TSH/Free T4, CBC/Ferritin, ANA/Lupus, CT Head Stroke, Brain MRI, or metabolic lab panels..."
-                />
-              </div>
-            )}
-
             {analysisError && (
-              <div style={{ padding: '10px 14px', background: 'var(--accent-terracotta-bg)', border: '1px solid #f8c9b9', borderRadius: '8px', color: 'var(--accent-terracotta)', fontSize: '0.82rem' }}>
+              <div style={{ marginTop: '10px', padding: '10px 14px', background: 'var(--critical-bg)', border: '1px solid var(--critical-border)', borderRadius: '8px', color: 'var(--critical-text)', fontSize: '0.82rem' }}>
                 <AlertCircle size={15} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
                 {analysisError}
               </div>
@@ -534,23 +499,11 @@ export default function App() {
             ) : (
             <div className="dashboard-grid" id="clinical-full-report">
               
-              {/* ========================================================================= */}
-              {/* ROW 1: AI SAFETY BANNER & CONFLICTING EVIDENCE (WHEN APPLICABLE)          */}
-              {/* ========================================================================= */}
-              <div className="ai-safety-banner">
-                <ShieldAlert size={18} className="ai-safety-icon" />
-                <div>
-                  <div className="ai-safety-title">AI Clinical Safety & Decision Support Notice</div>
-                  <div className="ai-safety-text">
-                    {analysisResult.ai_safety_notice}
-                  </div>
-                </div>
-              </div>
 
               {analysisResult.conflicting_evidence_alert && analysisResult.conflicting_evidence_alert.conflict_detected && (
                 <div className="conflicting-evidence-card">
                   <div className="conflict-header">
-                    <AlertOctagon size={18} color="#dc2626" />
+                    <AlertTriangle size={17} strokeWidth={1.5} color="var(--critical-accent)" />
                     <span>{analysisResult.conflicting_evidence_alert.conflict_title}</span>
                   </div>
                   
@@ -579,10 +532,10 @@ export default function App() {
                 <div className="patient-profile-card">
                   <div className="patient-profile-header">
                     <div className="patient-name-large">
-                      <User size={22} color="var(--accent-primary)" />
+                      <User size={18} strokeWidth={1.5} color="var(--brand-accent)" />
                       <span>{analysisResult.patient_context.name}</span>
                     </div>
-                    <span style={{ fontSize: '0.74rem', background: 'var(--accent-forest-bg)', color: 'var(--accent-forest)', border: '1px solid #b7dfca', padding: '3px 10px', borderRadius: '999px', fontWeight: 700 }}>
+                    <span style={{ fontSize: '0.72rem', background: 'var(--brand-accent-soft)', color: 'var(--brand-accent)', border: '1px solid var(--good-border)', padding: '2px 8px', borderRadius: '4px', fontWeight: 600 }}>
                       {analysisResult.detected_specialty}
                     </span>
                   </div>
@@ -611,7 +564,7 @@ export default function App() {
                     {analysisResult.patient_context.calculated_bmi && (
                       <div className="patient-stat-cell">
                         <span className="patient-stat-label">Calculated BMI</span>
-                        <span className="patient-stat-value" style={{ color: 'var(--accent-terracotta)' }}>{analysisResult.patient_context.calculated_bmi}</span>
+                        <span className="patient-stat-value">{analysisResult.patient_context.calculated_bmi}</span>
                       </div>
                     )}
 
@@ -622,53 +575,115 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Column 2: Primary Impression & AI Evidence Score */}
+                {/* Column 2: Primary Impression & AI Evidence Score Gauge */}
                 <div className="neuro-hero-card">
                   <div>
                     <div className="neuro-acuity-tag">
-                      <AlertTriangle size={13} />
-                      <span>{analysisResult.acuity_level}</span>
+                      <AlertTriangle size={12} strokeWidth={1.5} />
+                      <span>{analysisResult.acuity_level ? analysisResult.acuity_level.replace(/^[^\w\s—()\/]+/, '').trim() : ''}</span>
                     </div>
                     <h2 className="neuro-diag-title">{analysisResult.primary_suspected_condition}</h2>
                     
-                    <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '8px', lineHeight: 1.5 }}>
-                      <strong>Certainty:</strong> {analysisResult.diagnostic_certainty_level}
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '6px', lineHeight: 1.45 }}>
+                      <strong style={{ color: 'var(--text-primary)' }}>Certainty:</strong> {analysisResult.diagnostic_certainty_level}
                     </div>
 
-                    <div style={{ fontSize: '0.78rem', color: 'var(--accent-terracotta)', marginTop: '6px', fontWeight: 600 }}>
-                      <strong>Confirmation:</strong> {analysisResult.required_confirmation}
+                    <div style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                      <strong style={{ color: 'var(--text-primary)' }}>Confirmation:</strong> {analysisResult.required_confirmation}
                     </div>
 
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '8px', fontStyle: 'italic' }}>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '6px' }}>
                       {analysisResult.evidence_score_disclaimer}
                     </div>
                   </div>
 
-                  <div className="neuro-metric-box">
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                      <span className="neuro-metric-val">{analysisResult.ai_evidence_score}</span>
-                      <button 
-                        className="score-info-btn"
-                        onClick={() => setRubricModalData({
-                          conditionName: analysisResult.primary_suspected_condition,
-                          score: analysisResult.ai_evidence_score,
-                          rubric: analysisResult.rubric_breakdown
-                        })}
-                        title="Click to view mathematical rubric breakdown"
-                      >
-                        ⓘ
-                      </button>
+                  {/* Horizontal Bar / Gauge per Section 4.6 */}
+                  <div className="evidence-gauge-container">
+                    <div className="evidence-gauge-header">
+                      <div className="evidence-gauge-label">
+                        <span>AI evidence score</span>
+                        <button 
+                          className="score-info-btn"
+                          onClick={() => setRubricModalData({
+                            conditionName: analysisResult.primary_suspected_condition,
+                            score: analysisResult.ai_evidence_score,
+                            rubric: analysisResult.rubric_breakdown
+                          })}
+                          title="View mathematical rubric breakdown"
+                        >
+                          ⓘ
+                        </button>
+                      </div>
+                      <div className="evidence-gauge-value">
+                        {analysisResult.ai_evidence_score}/100 — {
+                          analysisResult.ai_evidence_score >= 76 ? 'High confidence' :
+                          analysisResult.ai_evidence_score >= 41 ? 'Moderate confidence' : 'Low confidence'
+                        }
+                      </div>
                     </div>
-                    <div className="score-gauge-bar-bg" style={{ margin: '6px auto' }}>
+                    <div className="evidence-gauge-track">
                       <div 
-                        className="score-gauge-bar-fill" 
+                        className="evidence-gauge-fill" 
                         style={{ 
                           width: `${Math.min(100, Math.max(5, analysisResult.ai_evidence_score))}%`,
-                          background: analysisResult.ai_evidence_score >= 76 ? 'var(--accent-terracotta)' : analysisResult.ai_evidence_score >= 41 ? 'var(--accent-amber)' : 'var(--accent-forest)'
+                          background: analysisResult.ai_evidence_score >= 76 
+                            ? 'var(--critical-accent)' 
+                            : analysisResult.ai_evidence_score >= 41 
+                              ? 'var(--moderate-accent)' 
+                              : 'var(--good-accent)'
                         }}
                       />
                     </div>
-                    <span className="neuro-metric-lbl">AI Evidence Score</span>
+                  </div>
+
+                  {/* Human-in-the-Loop Feedback Controls per Section 4.11 */}
+                  <div className="hitl-actions-container">
+                    {feedbackLog.some(f => f.condition_name === analysisResult.primary_suspected_condition) ? (
+                      (() => {
+                        const logEntry = feedbackLog.find(f => f.condition_name === analysisResult.primary_suspected_condition);
+                        return (
+                          <div className={`hitl-logged-badge ${logEntry.action.toLowerCase()}`}>
+                            {logEntry.action === 'CONFIRMED' && <Check size={12} strokeWidth={2} />}
+                            {logEntry.action === 'OVERRIDDEN' && <Edit3 size={12} strokeWidth={1.5} />}
+                            {logEntry.action === 'FLAGGED' && <Flag size={12} strokeWidth={1.5} />}
+                            <span>{logEntry.action}: {logEntry.override_text || logEntry.clinician_id}</span>
+                          </div>
+                        );
+                      })()
+                    ) : (
+                      <>
+                        <button 
+                          className="hitl-btn confirm"
+                          onClick={() => handleConfirmFeedback({
+                            condition_name: analysisResult.primary_suspected_condition,
+                            ai_evidence_score: analysisResult.ai_evidence_score
+                          })}
+                        >
+                          <Check size={13} strokeWidth={2} />
+                          <span>Confirm</span>
+                        </button>
+                        <button 
+                          className="hitl-btn override"
+                          onClick={() => handleOpenOverride({
+                            condition_name: analysisResult.primary_suspected_condition,
+                            ai_evidence_score: analysisResult.ai_evidence_score
+                          })}
+                        >
+                          <Edit3 size={13} strokeWidth={1.5} />
+                          <span>Override</span>
+                        </button>
+                        <button 
+                          className="hitl-btn flag"
+                          onClick={() => handleOpenFlag({
+                            condition_name: analysisResult.primary_suspected_condition,
+                            ai_evidence_score: analysisResult.ai_evidence_score
+                          })}
+                        >
+                          <Flag size={13} strokeWidth={1.5} />
+                          <span>Flag as incorrect</span>
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -724,7 +739,7 @@ export default function App() {
                 <div className="glass-card">
                   <div className="card-header">
                     <div className="card-title-group">
-                      <GitBranch size={18} color="var(--accent-primary)" />
+                      <GitBranch size={16} strokeWidth={1.5} color="var(--brand-accent)" />
                       <div>
                         <h3 className="card-title">Decision Node Traversal Path ("Node Points")</h3>
                         <p className="card-subtitle">Step-by-Step Split Criteria Explaining Reasoning</p>
@@ -745,7 +760,8 @@ export default function App() {
                             <strong>Criteria:</strong> {node.clinical_criterion}
                           </div>
                           <div className="node-obs-text">
-                            ✓ {node.patient_observation}
+                            <Check size={13} strokeWidth={2} color="var(--good-accent)" />
+                            <span>{node.patient_observation}</span>
                           </div>
                         </div>
                       </div>
@@ -760,13 +776,13 @@ export default function App() {
               {/* ========================================================================= */}
               <div className="two-col-grid">
                 
-                {/* ⚡ Short-Term Actionable Routine (Days 1–30) */}
-                <div className="glass-card" style={{ borderLeft: '4px solid var(--accent-terracotta)' }}>
+                {/* Short-Term Actionable Routine (Days 1–30) */}
+                <div className="glass-card">
                   <div className="card-header">
                     <div className="card-title-group">
-                      <Zap size={18} color="var(--accent-terracotta)" />
+                      <Zap size={16} strokeWidth={1.5} color="var(--accent-primary)" />
                       <div>
-                        <h3 className="card-title" style={{ color: 'var(--accent-terracotta)' }}>⚡ Short-Term Actionable Routine (Days 1–30)</h3>
+                        <h3 className="card-title">Short-Term Actionable Routine (Days 1–30)</h3>
                         <p className="card-subtitle">Immediate Daily & Weekly Protocols to Halt Risk Progression</p>
                       </div>
                     </div>
@@ -777,7 +793,7 @@ export default function App() {
                       <div key={idx} className="routine-step-card short-term">
                         <div className="routine-top-row">
                           <span className="routine-title">
-                            <CalendarDays size={15} color="var(--accent-terracotta)" />
+                            <CalendarDays size={14} strokeWidth={1.5} color="var(--text-secondary)" />
                             {step.title}
                           </span>
                           <span className="routine-time-badge cyan">{step.timeframe}</span>
@@ -791,13 +807,13 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* 🛡️ Long-Term Disease Prevention Protocol (Months 1–6+) */}
-                <div className="glass-card" style={{ borderLeft: '4px solid var(--accent-primary)' }}>
+                {/* Long-Term Disease Prevention Protocol (Months 1–6+) */}
+                <div className="glass-card">
                   <div className="card-header">
                     <div className="card-title-group">
-                      <TrendingDown size={18} color="var(--accent-primary)" />
+                      <TrendingDown size={16} strokeWidth={1.5} color="var(--brand-accent)" />
                       <div>
-                        <h3 className="card-title" style={{ color: 'var(--accent-primary)' }}>🛡️ Long-Term Prevention Protocol (Months 1–6+)</h3>
+                        <h3 className="card-title">Long-Term Prevention Protocol (Months 1–6+)</h3>
                         <p className="card-subtitle">Sustained Lifestyle, Surveillance & Clinical Roadmaps</p>
                       </div>
                     </div>
@@ -808,7 +824,7 @@ export default function App() {
                       <div key={idx} className="routine-step-card long-term">
                         <div className="routine-top-row">
                           <span className="routine-title">
-                            <ShieldCheck size={15} color="var(--accent-primary)" />
+                            <ShieldCheck size={14} strokeWidth={1.5} color="var(--brand-accent)" />
                             {step.title}
                           </span>
                           <span className="routine-time-badge emerald">{step.timeframe}</span>
@@ -833,7 +849,7 @@ export default function App() {
                 <div className="glass-card">
                   <div className="card-header">
                     <div className="card-title-group">
-                      <Activity size={18} color="var(--accent-primary)" />
+                      <Activity size={16} strokeWidth={1.5} color="var(--brand-accent)" />
                       <div>
                         <h3 className="card-title">
                           {analysisResult.modifiable_risk_factors && analysisResult.modifiable_risk_factors.length > 0 
@@ -859,41 +875,66 @@ export default function App() {
                         <tbody>
                           {analysisResult.modifiable_risk_factors.map((rf, idx) => (
                             <tr key={idx}>
-                              <td><strong style={{ color: 'var(--text-title)' }}>{rf.risk_factor}</strong></td>
-                              <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-terracotta)', fontWeight: 700 }}>{rf.observed_value}</td>
+                              <td><strong>{rf.risk_factor}</strong></td>
+                              <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', fontWeight: 600 }}>{rf.observed_value}</td>
                               <td style={{ color: 'var(--text-primary)', fontSize: '0.78rem' }}>{rf.pathophysiologic_explanation}</td>
-                              <td style={{ color: 'var(--accent-forest)', fontSize: '0.78rem', fontWeight: 600 }}>{rf.tailored_prevention_protocol}</td>
+                              <td style={{ color: 'var(--good-accent)', fontSize: '0.78rem', fontWeight: 600 }}>{rf.tailored_prevention_protocol}</td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
                     ) : (
-                      <table className="params-table">
-                        <thead>
-                          <tr>
-                            <th>Parameter</th>
-                            <th>Value</th>
-                            <th>Status</th>
-                            <th>Source Citation</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {analysisResult.extracted_parameters.map((param, idx) => (
-                            <tr key={idx}>
-                              <td><strong style={{ color: 'var(--text-title)' }}>{param.name}</strong></td>
-                              <td style={{ fontWeight: 700 }}>{param.value}</td>
-                              <td>
-                                <span className={`param-status-badge ${param.status.toLowerCase()}`}>
-                                  {param.status}
-                                </span>
-                              </td>
-                              <td style={{ fontStyle: 'italic', fontSize: '0.76rem', color: 'var(--text-muted)' }}>
-                                "{param.source_text}"
-                              </td>
+                      <>
+                        <table className="params-table">
+                          <thead>
+                            <tr>
+                              <th>Parameter</th>
+                              <th>Value</th>
+                              <th>Status</th>
+                              <th>Source Citation</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody>
+                            {(() => {
+                              const allParams = analysisResult.extracted_parameters || [];
+                              const criticalParams = allParams.filter(p => p.status === 'CRITICAL');
+                              const displayed = showAllParams || criticalParams.length === 0 ? allParams : criticalParams;
+                              return displayed.map((param, idx) => (
+                                <tr key={idx}>
+                                  <td><strong>{param.name}</strong></td>
+                                  <td style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{param.value}</td>
+                                  <td>
+                                    <span className={`param-status-badge ${param.status.toLowerCase()}`}>
+                                      {param.status}
+                                    </span>
+                                  </td>
+                                  <td className="param-source-citation">
+                                    "{param.source_text}"
+                                  </td>
+                                </tr>
+                              ));
+                            })()}
+                          </tbody>
+                        </table>
+
+                        {/* Collapsible toggle: Show all vs Show critical only */}
+                        {(() => {
+                          const allParams = analysisResult.extracted_parameters || [];
+                          const criticalParams = allParams.filter(p => p.status === 'CRITICAL');
+                          if (allParams.length > criticalParams.length && criticalParams.length > 0) {
+                            return (
+                              <button 
+                                className="disclosure-toggle"
+                                onClick={() => setShowAllParams(!showAllParams)}
+                              >
+                                {showAllParams ? <ChevronUp size={13} strokeWidth={1.5} /> : <ChevronDown size={13} strokeWidth={1.5} />}
+                                <span>{showAllParams ? `Show critical only (${criticalParams.length} parameters)` : `Show all parameters (${allParams.length})`}</span>
+                              </button>
+                            );
+                          }
+                          return null;
+                        })()}
+                      </>
                     )}
                   </div>
                 </div>
@@ -902,7 +943,7 @@ export default function App() {
                 <div className="glass-card">
                   <div className="card-header">
                     <div className="card-title-group">
-                      <Target size={18} color="var(--accent-terracotta)" />
+                      <Target size={16} strokeWidth={1.5} color="var(--accent-primary)" />
                       <div>
                         <h3 className="card-title">AI Differentials & Confirmatory Workup</h3>
                         <p className="card-subtitle">Secondary Considerations & Recommended Next Steps</p>
@@ -910,17 +951,17 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="diff-list" style={{ marginBottom: '16px' }}>
+                  <div className="diff-list" style={{ marginBottom: '14px' }}>
                     {analysisResult.differential_considerations.slice(0, 2).map((diff, idx) => (
-                      <div key={idx} className={`diff-item ${idx === 0 ? 'primary' : ''}`}>
+                      <div key={idx} className="diff-item">
                         <div className="diff-top">
                           <span className="diff-name">{diff.condition_name}</span>
-                          <span className="diff-prob" style={{ color: idx === 0 ? 'var(--accent-terracotta)' : 'var(--text-secondary)' }}>
+                          <span className="diff-prob" style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
                             Evidence: {diff.ai_evidence_score}/100
                           </span>
                         </div>
-                        <div style={{ fontSize: '0.76rem', color: 'var(--accent-terracotta)', margin: '3px 0', fontWeight: 600 }}>
-                          Certainty: {diff.diagnostic_certainty}
+                        <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', margin: '2px 0' }}>
+                          <strong style={{ color: 'var(--text-primary)' }}>Certainty:</strong> {diff.diagnostic_certainty}
                         </div>
                         <p className="diff-rationale">{diff.clinical_rationale}</p>
                       </div>
@@ -929,23 +970,36 @@ export default function App() {
 
                   {/* Confirmatory Diagnostic Workup */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <div style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
+                    <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                       Recommended Diagnostic Workup:
                     </div>
                     {analysisResult.recommended_diagnostic_workup.map((test, idx) => (
                       <div key={idx} className="workup-card">
                         <div className="workup-top">
-                          <strong style={{ fontSize: '0.84rem', color: 'var(--text-title)' }}>{test.test_name}</strong>
+                          <strong style={{ fontSize: '0.82rem', color: 'var(--text-primary)' }}>{test.test_name}</strong>
                           <span className={`workup-urgency-pill ${test.urgency.includes('STAT') ? 'stat' : test.urgency.includes('Urgent') ? 'urgent' : 'routine'}`}>
                             {test.urgency}
                           </span>
                         </div>
-                        <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>Category: {test.category} • {test.clinical_purpose}</span>
+                        <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Category: {test.category} • {test.clinical_purpose}</span>
                       </div>
                     ))}
                   </div>
                 </div>
 
+              </div>
+
+              {/* ========================================================================= */}
+              {/* BOTTOM DISCLAIMER: AI CLINICAL SAFETY NOTICE                              */}
+              {/* ========================================================================= */}
+              <div className="ai-safety-banner">
+                <Info size={16} strokeWidth={1.5} className="ai-safety-icon" />
+                <div>
+                  <div className="ai-safety-title">AI Clinical Safety & Decision Support Notice</div>
+                  <div className="ai-safety-text">
+                    {analysisResult.ai_safety_notice}
+                  </div>
+                </div>
               </div>
 
             </div>
@@ -1248,140 +1302,23 @@ export default function App() {
       {/* TAB 4: LIVE BLINDED EVALUATION HUB                                       */}
       {/* ========================================================================= */}
       {activeTab === 'evaluation' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
-          <div className="glass-card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-              <div>
-                <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-title)', fontFamily: 'var(--font-serif)' }}>
-                  Live Blinded Validation Benchmark Hub
-                </h2>
-                <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)' }}>
-                  Rigorous evaluation across 10 blinded clinical validation benchmark cases (6 disease-positive, 4 hard negative controls).
-                </p>
-              </div>
+        <BenchmarkHubView 
+          evalResults={evalResults} 
+          evalLoading={evalLoading} 
+          onRerunBenchmark={runEvaluationHub} 
+        />
+      )}
 
-              <button className="analyze-main-btn" style={{ width: 'auto', padding: '12px 22px' }} onClick={runEvaluationHub} disabled={evalLoading}>
-                {evalLoading ? <RefreshCw className="animate-spin" size={16} /> : <BarChart3 size={16} />}
-                <span>{evalLoading ? 'Running Benchmark...' : 'Rerun Evaluation Suite'}</span>
-              </button>
-            </div>
-          </div>
-
-          {evalResults && (
-            <>
-              {/* Metrics Grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '20px' }}>
-                <div className="glass-card" style={{ textAlign: 'center', padding: '20px' }}>
-                  <div style={{ fontSize: '2.2rem', fontWeight: 800, fontFamily: 'var(--font-serif)', color: 'var(--accent-forest)' }}>
-                    {(evalResults.accuracy * 100).toFixed(1)}%
-                  </div>
-                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                    Overall Accuracy
-                  </div>
-                </div>
-
-                <div className="glass-card" style={{ textAlign: 'center', padding: '20px' }}>
-                  <div style={{ fontSize: '2.2rem', fontWeight: 800, fontFamily: 'var(--font-serif)', color: 'var(--accent-cyan)' }}>
-                    {(evalResults.sensitivity_recall * 100).toFixed(1)}%
-                  </div>
-                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                    Sensitivity (Recall)
-                  </div>
-                </div>
-
-                <div className="glass-card" style={{ textAlign: 'center', padding: '20px' }}>
-                  <div style={{ fontSize: '2.2rem', fontWeight: 800, fontFamily: 'var(--font-serif)', color: 'var(--accent-primary)' }}>
-                    {(evalResults.specificity * 100).toFixed(1)}%
-                  </div>
-                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                    Specificity
-                  </div>
-                </div>
-
-                <div className="glass-card" style={{ textAlign: 'center', padding: '20px' }}>
-                  <div style={{ fontSize: '2.2rem', fontWeight: 800, fontFamily: 'var(--font-serif)', color: 'var(--accent-amber)' }}>
-                    {evalResults.auroc.toFixed(3)}
-                  </div>
-                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                    AUROC
-                  </div>
-                </div>
-
-                <div className="glass-card" style={{ textAlign: 'center', padding: '20px' }}>
-                  <div style={{ fontSize: '2.2rem', fontWeight: 800, fontFamily: 'var(--font-serif)', color: 'var(--accent-terracotta)' }}>
-                    {evalResults.brier_score.toFixed(4)}
-                  </div>
-                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                    Brier Error
-                  </div>
-                </div>
-              </div>
-
-              {/* Confusion Matrix & Case Manifest */}
-              <div className="two-col-grid">
-                <div className="glass-card">
-                  <h3 style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: '16px', fontFamily: 'var(--font-serif)' }}>2x2 Clinical Confusion Matrix</h3>
-                  <div className="cm-grid">
-                    <div className="cm-cell">
-                      <div className="cm-val" style={{ color: 'var(--accent-forest)' }}>{evalResults.confusion_matrix.true_positive}</div>
-                      <div className="cm-lbl">True Positive (TP)</div>
-                    </div>
-                    <div className="cm-cell">
-                      <div className="cm-val" style={{ color: 'var(--accent-terracotta)' }}>{evalResults.confusion_matrix.false_positive}</div>
-                      <div className="cm-lbl">False Positive (FP)</div>
-                    </div>
-                    <div className="cm-cell">
-                      <div className="cm-val" style={{ color: 'var(--accent-terracotta)' }}>{evalResults.confusion_matrix.false_negative}</div>
-                      <div className="cm-lbl">False Negative (FN)</div>
-                    </div>
-                    <div className="cm-cell">
-                      <div className="cm-val" style={{ color: 'var(--accent-forest)' }}>{evalResults.confusion_matrix.true_negative}</div>
-                      <div className="cm-lbl">True Negative (TN)</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="glass-card">
-                  <h3 style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: '16px', fontFamily: 'var(--font-serif)' }}>Evaluated Benchmark Manifest</h3>
-                  <div className="params-table-container">
-                    <table className="eval-table">
-                      <thead>
-                        <tr>
-                          <th>Case</th>
-                          <th>Modality</th>
-                          <th>Predicted Label</th>
-                          <th>Score</th>
-                          <th>Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {evalResults.evaluated_cases.map(c => (
-                          <tr key={c.case_id}>
-                            <td><strong>{c.case_id}</strong></td>
-                            <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>{c.modality}</td>
-                            <td>{c.predicted_label}</td>
-                            <td style={{ fontFamily: 'var(--font-mono)' }}>{c.model_score}</td>
-                            <td>
-                              <span 
-                                style={{ 
-                                  padding: '3px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700,
-                                  background: c.match_status.startsWith('CORRECT') ? 'var(--accent-forest-bg)' : 'var(--accent-terracotta-bg)',
-                                  color: c.match_status.startsWith('CORRECT') ? 'var(--accent-forest)' : 'var(--accent-terracotta)'
-                                }}
-                              >
-                                {c.match_status}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
+      {/* ========================================================================= */}
+      {/* TAB 5: CLINICAL MODEL CARD SPECIFICATION                                  */}
+      {/* ========================================================================= */}
+      {activeTab === 'model-card' && (
+        <ModelCardView 
+          onNavigateToBenchmark={() => { 
+            setActiveTab('evaluation'); 
+            if (!evalResults) runEvaluationHub(); 
+          }} 
+        />
       )}
 
       {/* Footer */}
@@ -1390,6 +1327,34 @@ export default function App() {
           <strong>HealthGuard AI — Clinical Decision Support & Prevention Prototype:</strong> Designed for clinical education and workflow decision support. AI evidence scores and decision tree traversal paths do not replace formal in-person diagnostic evaluation or physician judgment.
         </p>
       </footer>
+
+      {/* Modals & Dialogs */}
+      <RubricModal 
+        isOpen={!!rubricModalData} 
+        onClose={() => setRubricModalData(null)} 
+        data={rubricModalData}
+        onNavigateToModelCard={() => {
+          setRubricModalData(null);
+          setActiveTab('model-card');
+        }}
+      />
+
+      <AuditLogModal 
+        isOpen={auditLogModalOpen} 
+        onClose={() => setAuditLogModalOpen(false)} 
+        feedbackLog={feedbackLog}
+        onClearLog={() => {
+          setFeedbackLog([]);
+          localStorage.removeItem('healthguard_feedback_log');
+        }}
+      />
+
+      <OverrideModal 
+        isOpen={!!overrideModalData} 
+        onClose={() => setOverrideModalData(null)} 
+        data={overrideModalData}
+        onSubmitFeedback={handleCommitFeedback}
+      />
     </div>
   );
 }

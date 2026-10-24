@@ -21,12 +21,12 @@ export default function SummaryView({ analysisResult, onSwitchToClinicianView })
     concernClass = "moderate";
   }
 
-  const urgencyTier = summary?.urgency_tier || (
+  const urgencyTier = summary?.urgency_tier?.replace(/^[^\w\s—]+/, '').trim() || (
     score >= 76 
-      ? "🔴 Time-Critical — Suspected High-Priority Condition, Escalate Immediately" 
+      ? "Time-Critical — Suspected High-Priority Condition, Escalate Immediately" 
       : score >= 41 
-        ? "🟠 Moderate — Clinical Assessment & Follow-up Recommended" 
-        : "🟢 Low Concern — Routine Clinical Monitoring"
+        ? "Moderate — Clinical Assessment & Follow-up Recommended" 
+        : "Low Concern — Routine Clinical Monitoring"
   );
 
   const headline = summary?.headline || `Clinical Summary for ${analysisResult.patient_context?.name || "Patient"}`;
@@ -46,7 +46,7 @@ export default function SummaryView({ analysisResult, onSwitchToClinicianView })
       {analysisResult.conflicting_evidence_alert && analysisResult.conflicting_evidence_alert.conflict_detected && (
         <div className="conflicting-evidence-card">
           <div className="conflict-header">
-            <AlertOctagon size={18} color="#dc2626" />
+            <AlertOctagon size={17} strokeWidth={1.5} color="var(--critical-accent)" />
             <span>{analysisResult.conflicting_evidence_alert.conflict_title}</span>
           </div>
           <div className="conflict-elements">
@@ -69,7 +69,16 @@ export default function SummaryView({ analysisResult, onSwitchToClinicianView })
         {/* Urgency Badge & Concern Tier */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
           <div className={`summary-urgency-pill ${concernClass}`}>
-            <AlertTriangle size={15} />
+            <span 
+              className="status-dot" 
+              style={{ 
+                background: concernClass === 'critical' 
+                  ? 'var(--critical-accent)' 
+                  : concernClass === 'moderate' 
+                    ? 'var(--moderate-accent)' 
+                    : 'var(--good-accent)' 
+              }} 
+            />
             <span>{urgencyTier}</span>
           </div>
 

@@ -174,7 +174,7 @@ def get_benchmark_samples():
             {
                 "id": "northstar_stroke_ct_cta_case",
                 "specialty": "Neurology / Neurovascular",
-                "title": "🚨 Acute Stroke CT + CTA (Marcus Bennett - 68yo M)",
+                "title": "Acute Stroke CT + CTA (Marcus Bennett - 68yo M)",
                 "description": "Right M1 segment LVO occlusion, loss of insular gray-white differentiation, no hemorrhage.",
                 "text": NORTHSTAR_STROKE_CT_CTA_REPORT
             },

@@ -77,64 +77,64 @@ export default function BenchmarkHubView({ evalResults, evalLoading, onRerunBenc
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '16px' }}>
         
         <div className="glass-card" style={{ textAlign: 'center', padding: '18px 14px' }}>
-          <div style={{ fontSize: '2.1rem', fontWeight: 800, fontFamily: 'var(--font-serif)', color: 'var(--accent-forest)' }}>
+          <div style={{ fontSize: '2rem', fontWeight: 600, fontFamily: 'var(--font-serif)', color: 'var(--text-primary)' }}>
             {(evalResults.accuracy * 100).toFixed(1)}%
           </div>
-          <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             Overall Accuracy
           </div>
         </div>
 
         <div className="glass-card" style={{ textAlign: 'center', padding: '18px 14px' }}>
-          <div style={{ fontSize: '2.1rem', fontWeight: 800, fontFamily: 'var(--font-serif)', color: 'var(--accent-primary)' }}>
+          <div style={{ fontSize: '2rem', fontWeight: 600, fontFamily: 'var(--font-serif)', color: 'var(--text-primary)' }}>
             {(evalResults.sensitivity_recall * 100).toFixed(1)}%
           </div>
-          <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             Sensitivity (Recall)
           </div>
         </div>
 
         <div className="glass-card" style={{ textAlign: 'center', padding: '18px 14px' }}>
-          <div style={{ fontSize: '2.1rem', fontWeight: 800, fontFamily: 'var(--font-serif)', color: 'var(--accent-forest)' }}>
+          <div style={{ fontSize: '2rem', fontWeight: 600, fontFamily: 'var(--font-serif)', color: 'var(--text-primary)' }}>
             {(evalResults.specificity * 100).toFixed(1)}%
           </div>
-          <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             Specificity
           </div>
         </div>
 
         <div className="glass-card" style={{ textAlign: 'center', padding: '18px 14px' }}>
-          <div style={{ fontSize: '2.1rem', fontWeight: 800, fontFamily: 'var(--font-serif)', color: 'var(--accent-cyan)' }}>
+          <div style={{ fontSize: '2rem', fontWeight: 600, fontFamily: 'var(--font-serif)', color: 'var(--text-primary)' }}>
             {(evalResults.precision * 100).toFixed(1)}%
           </div>
-          <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             Precision (PPV)
           </div>
         </div>
 
         <div className="glass-card" style={{ textAlign: 'center', padding: '18px 14px' }}>
-          <div style={{ fontSize: '2.1rem', fontWeight: 800, fontFamily: 'var(--font-serif)', color: 'var(--accent-forest)' }}>
+          <div style={{ fontSize: '2rem', fontWeight: 600, fontFamily: 'var(--font-serif)', color: 'var(--text-primary)' }}>
             {evalResults.macro_f1.toFixed(3)}
           </div>
-          <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             Macro F1 Score
           </div>
         </div>
 
         <div className="glass-card" style={{ textAlign: 'center', padding: '18px 14px' }}>
-          <div style={{ fontSize: '2.1rem', fontWeight: 800, fontFamily: 'var(--font-serif)', color: 'var(--accent-amber)' }}>
+          <div style={{ fontSize: '2rem', fontWeight: 600, fontFamily: 'var(--font-serif)', color: 'var(--text-primary)' }}>
             {evalResults.auroc.toFixed(3)}
           </div>
-          <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             AUROC Area
           </div>
         </div>
 
         <div className="glass-card" style={{ textAlign: 'center', padding: '18px 14px' }}>
-          <div style={{ fontSize: '2.1rem', fontWeight: 800, fontFamily: 'var(--font-serif)', color: 'var(--accent-terracotta)' }}>
+          <div style={{ fontSize: '2rem', fontWeight: 600, fontFamily: 'var(--font-serif)', color: 'var(--text-primary)' }}>
             {evalResults.brier_score.toFixed(4)}
           </div>
-          <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             Brier Calibration
           </div>
         </div>
@@ -160,53 +160,53 @@ export default function BenchmarkHubView({ evalResults, evalLoading, onRerunBenc
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
               
               {/* True Positive */}
-              <div style={{ background: 'var(--accent-forest-bg)', border: '1px solid #b7dfca', borderRadius: 'var(--radius-md)', padding: '20px', textAlign: 'center' }}>
-                <div style={{ fontSize: '2.4rem', fontWeight: 800, fontFamily: 'var(--font-serif)', color: 'var(--accent-forest)' }}>
+              <div style={{ background: 'var(--good-bg)', border: '1px solid var(--good-border)', borderRadius: 'var(--radius-md)', padding: '18px', textAlign: 'center' }}>
+                <div style={{ fontSize: '2.2rem', fontWeight: 600, fontFamily: 'var(--font-serif)', color: 'var(--text-primary)' }}>
                   {cm.true_positive}
                 </div>
-                <div style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--accent-forest)', textTransform: 'uppercase' }}>
+                <div style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--good-text)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                   True Positive (TP)
                 </div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '3px' }}>
                   Disease correctly identified
                 </div>
               </div>
 
               {/* False Positive */}
-              <div style={{ background: cm.false_positive > 0 ? 'var(--accent-terracotta-bg)' : '#faf8f5', border: cm.false_positive > 0 ? '1px solid #fecdd3' : '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '20px', textAlign: 'center' }}>
-                <div style={{ fontSize: '2.4rem', fontWeight: 800, fontFamily: 'var(--font-serif)', color: cm.false_positive > 0 ? 'var(--accent-terracotta)' : 'var(--text-muted)' }}>
+              <div style={{ background: cm.false_positive > 0 ? 'var(--critical-bg)' : 'var(--bg-page)', border: cm.false_positive > 0 ? '1px solid var(--critical-border)' : '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', padding: '18px', textAlign: 'center' }}>
+                <div style={{ fontSize: '2.2rem', fontWeight: 600, fontFamily: 'var(--font-serif)', color: 'var(--text-primary)' }}>
                   {cm.false_positive}
                 </div>
-                <div style={{ fontSize: '0.78rem', fontWeight: 800, color: cm.false_positive > 0 ? 'var(--accent-terracotta)' : 'var(--text-muted)', textTransform: 'uppercase' }}>
+                <div style={{ fontSize: '0.74rem', fontWeight: 600, color: cm.false_positive > 0 ? 'var(--critical-text)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                   False Positive (FP)
                 </div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '3px' }}>
                   Normal misclassified as disease
                 </div>
               </div>
 
               {/* False Negative */}
-              <div style={{ background: cm.false_negative > 0 ? 'var(--accent-terracotta-bg)' : '#faf8f5', border: cm.false_negative > 0 ? '1px solid #fecdd3' : '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '20px', textAlign: 'center' }}>
-                <div style={{ fontSize: '2.4rem', fontWeight: 800, fontFamily: 'var(--font-serif)', color: cm.false_negative > 0 ? 'var(--accent-terracotta)' : 'var(--text-muted)' }}>
+              <div style={{ background: cm.false_negative > 0 ? 'var(--critical-bg)' : 'var(--bg-page)', border: cm.false_negative > 0 ? '1px solid var(--critical-border)' : '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', padding: '18px', textAlign: 'center' }}>
+                <div style={{ fontSize: '2.2rem', fontWeight: 600, fontFamily: 'var(--font-serif)', color: 'var(--text-primary)' }}>
                   {cm.false_negative}
                 </div>
-                <div style={{ fontSize: '0.78rem', fontWeight: 800, color: cm.false_negative > 0 ? 'var(--accent-terracotta)' : 'var(--text-muted)', textTransform: 'uppercase' }}>
+                <div style={{ fontSize: '0.74rem', fontWeight: 600, color: cm.false_negative > 0 ? 'var(--critical-text)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                   False Negative (FN)
                 </div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '3px' }}>
                   Disease missed / under-called
                 </div>
               </div>
 
               {/* True Negative */}
-              <div style={{ background: 'var(--accent-forest-bg)', border: '1px solid #b7dfca', borderRadius: 'var(--radius-md)', padding: '20px', textAlign: 'center' }}>
-                <div style={{ fontSize: '2.4rem', fontWeight: 800, fontFamily: 'var(--font-serif)', color: 'var(--accent-forest)' }}>
+              <div style={{ background: 'var(--good-bg)', border: '1px solid var(--good-border)', borderRadius: 'var(--radius-md)', padding: '18px', textAlign: 'center' }}>
+                <div style={{ fontSize: '2.2rem', fontWeight: 600, fontFamily: 'var(--font-serif)', color: 'var(--text-primary)' }}>
                   {cm.true_negative}
                 </div>
-                <div style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--accent-forest)', textTransform: 'uppercase' }}>
+                <div style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--good-text)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                   True Negative (TN)
                 </div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '3px' }}>
                   Hard negative control confirmed
                 </div>
               </div>
@@ -373,14 +373,15 @@ export default function BenchmarkHubView({ evalResults, evalLoading, onRerunBenc
                   </td>
                   <td style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{c.ground_truth}</td>
                   <td style={{ fontWeight: 600 }}>{c.predicted_label}</td>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{c.model_score}/100</td>
+                  <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{c.model_score}/100</td>
                   <td>
                     <span 
                       style={{ 
-                        padding: '4px 9px', borderRadius: '999px', fontSize: '0.7rem', fontWeight: 800,
-                        background: c.match_status.startsWith('CORRECT') ? 'var(--accent-forest-bg)' : 'var(--accent-terracotta-bg)',
-                        color: c.match_status.startsWith('CORRECT') ? 'var(--accent-forest)' : 'var(--accent-terracotta)',
-                        border: c.match_status.startsWith('CORRECT') ? '1px solid #86efac' : '1px solid #fda4af'
+                        padding: '3px 8px', borderRadius: '4px', fontSize: '0.68rem', fontWeight: 600,
+                        fontFamily: 'var(--font-mono)',
+                        background: c.match_status.startsWith('CORRECT') ? 'var(--good-bg)' : 'var(--critical-bg)',
+                        color: c.match_status.startsWith('CORRECT') ? 'var(--good-text)' : 'var(--critical-text)',
+                        border: c.match_status.startsWith('CORRECT') ? '1px solid var(--good-border)' : '1px solid var(--critical-border)'
                       }}
                     >
                       {c.match_status}

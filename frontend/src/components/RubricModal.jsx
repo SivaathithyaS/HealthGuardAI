@@ -71,21 +71,21 @@ export default function RubricModal({ isOpen, onClose, data, onNavigateToModelCa
                       <td style={{ fontWeight: 600, color: 'var(--text-title)' }}>
                         {item.criterion}
                       </td>
-                      <td style={{ textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 700, color: item.met ? 'var(--accent-forest)' : 'var(--accent-terracotta)' }}>
+                      <td style={{ textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 600, color: item.met ? 'var(--good-accent)' : 'var(--critical-accent)' }}>
                         +{item.points} / {item.max_points}
                       </td>
                       <td style={{ textAlign: 'center' }}>
                         {item.met ? (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem', fontWeight: 700, color: 'var(--accent-forest)', background: 'var(--accent-forest-bg)', padding: '2px 8px', borderRadius: '4px' }}>
-                            <CheckCircle2 size={12} /> Met
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', fontWeight: 600, color: 'var(--good-text)', background: 'var(--good-bg)', border: '1px solid var(--good-border)', padding: '2px 8px', borderRadius: '4px' }}>
+                            <CheckCircle2 size={12} strokeWidth={1.5} /> Met
                           </span>
                         ) : (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem', fontWeight: 700, color: 'var(--accent-terracotta)', background: 'var(--accent-terracotta-bg)', padding: '2px 8px', borderRadius: '4px' }}>
-                            <AlertCircle size={12} /> Unmet
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', fontWeight: 600, color: 'var(--critical-text)', background: 'var(--critical-bg)', border: '1px solid var(--critical-border)', padding: '2px 8px', borderRadius: '4px' }}>
+                            <AlertCircle size={12} strokeWidth={1.5} /> Unmet
                           </span>
                         )}
                       </td>
-                      <td style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+                      <td style={{ fontSize: '0.74rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
                         "{item.evidence}"
                       </td>
                     </tr>

@@ -185,7 +185,7 @@ class StrokeService:
             primary_consideration="Acute Ischemic Stroke — Right MCA Territory (Right M1 Large Vessel Occlusion)",
             model_score=94.0,
             confidence_level="HIGH",
-            acuity_category="🚨 TIME-CRITICAL EMERGENCY (Emergent Neurovascular / Endovascular Priority)",
+            acuity_category="TIME-CRITICAL EMERGENCY (Emergent Neurovascular / Endovascular Priority)",
             observed_evidence=observed,
             differential_considerations=differentials,
             clinical_confirmation_requirements=confirmations,

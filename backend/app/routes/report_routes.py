@@ -61,7 +61,7 @@ def get_sample_reports():
             },
             {
                 "id": "metabolic_renal_case",
-                "title": "🚨 Severe Metabolic & Early Renal Case (High Glucose 168, Chol 248, Creatinine 1.85)",
+                "title": "Severe Metabolic & Early Renal Case (High Glucose 168, Chol 248, Creatinine 1.85)",
                 "description": "Patient with diabetic nephropathy indicators and hypertensive strain.",
                 "text": SAMPLE_LAB_REPORTS["metabolic_renal_case"]
             },

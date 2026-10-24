@@ -48,38 +48,38 @@ export default function AuditLogModal({ isOpen, onClose, feedbackLog, onClearLog
           
           {/* Summary Pills Row */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
-            <div style={{ background: 'var(--bg-main)', padding: '12px', borderRadius: 'var(--radius-sm)', textAlign: 'center', border: '1px solid var(--border-subtle)' }}>
-              <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-title)', fontFamily: 'var(--font-serif)' }}>
+            <div style={{ background: 'var(--bg-page)', padding: '12px', borderRadius: 'var(--radius-sm)', textAlign: 'center', border: '1px solid var(--border-default)' }}>
+              <div style={{ fontSize: '1.4rem', fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'var(--font-serif)' }}>
                 {feedbackLog.length}
               </div>
-              <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+              <div style={{ fontSize: '0.68rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                 Total Actions
               </div>
             </div>
 
-            <div style={{ background: 'var(--accent-forest-bg)', padding: '12px', borderRadius: 'var(--radius-sm)', textAlign: 'center', border: '1px solid #b7dfca' }}>
-              <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--accent-forest)', fontFamily: 'var(--font-serif)' }}>
+            <div style={{ background: 'var(--good-bg)', padding: '12px', borderRadius: 'var(--radius-sm)', textAlign: 'center', border: '1px solid var(--good-border)' }}>
+              <div style={{ fontSize: '1.4rem', fontWeight: 600, color: 'var(--good-text)', fontFamily: 'var(--font-serif)' }}>
                 {countConfirmed}
               </div>
-              <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--accent-forest)', textTransform: 'uppercase' }}>
+              <div style={{ fontSize: '0.68rem', fontWeight: 600, color: 'var(--good-text)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                 Confirmed
               </div>
             </div>
 
-            <div style={{ background: 'var(--accent-cyan-bg)', padding: '12px', borderRadius: 'var(--radius-sm)', textAlign: 'center', border: '1px solid #bae6fd' }}>
-              <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--accent-cyan)', fontFamily: 'var(--font-serif)' }}>
+            <div style={{ background: 'var(--bg-page)', padding: '12px', borderRadius: 'var(--radius-sm)', textAlign: 'center', border: '1px solid var(--border-default)' }}>
+              <div style={{ fontSize: '1.4rem', fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'var(--font-serif)' }}>
                 {countOverridden}
               </div>
-              <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--accent-cyan)', textTransform: 'uppercase' }}>
+              <div style={{ fontSize: '0.68rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                 Overridden
               </div>
             </div>
 
-            <div style={{ background: 'var(--accent-terracotta-bg)', padding: '12px', borderRadius: 'var(--radius-sm)', textAlign: 'center', border: '1px solid #fecdd3' }}>
-              <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--accent-terracotta)', fontFamily: 'var(--font-serif)' }}>
+            <div style={{ background: 'var(--critical-bg)', padding: '12px', borderRadius: 'var(--radius-sm)', textAlign: 'center', border: '1px solid var(--critical-border)' }}>
+              <div style={{ fontSize: '1.4rem', fontWeight: 600, color: 'var(--critical-text)', fontFamily: 'var(--font-serif)' }}>
                 {countFlagged}
               </div>
-              <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--accent-terracotta)', textTransform: 'uppercase' }}>
+              <div style={{ fontSize: '0.68rem', fontWeight: 600, color: 'var(--critical-text)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                 Flagged
               </div>
             </div>

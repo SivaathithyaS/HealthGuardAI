@@ -1,0 +1,16 @@
+{
+  "name": "ecg_cnn",
+  "modality": "ecg",
+  "model_version": "ecg-cnn-v1-stub",
+  "stub": true,
+  "threshold": 0.6,
+  "weights_file": "weights.pt",
+  "weights_sha256": "436422a88a2e98b635eed7eecd0c6ad7ac3c0ba26afeb2f25c2019a90b04755d",
+  "labels": [
+    "Normal Sinus Rhythm",
+    "Atrial Fibrillation",
+    "ST Elevation / Ischemia",
+    "Ventricular Tachycardia"
+  ],
+  "description": "1D-CNN ResNet-18 architecture for Lead-II rhythm strip classification and ST segment deviation detection."
+}

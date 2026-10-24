@@ -6,7 +6,7 @@ class ProvenanceItem(BaseModel):
     feature: str
     feature_name: str
     value: Any
-    unit: Optional[str] = ""
+    unit: str = ""
     source_section: str
     source_text: str
     confidence: float

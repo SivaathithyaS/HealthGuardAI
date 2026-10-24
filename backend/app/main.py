@@ -4,6 +4,7 @@ from backend.app.routes.heart_routes import router as heart_router
 from backend.app.routes.report_routes import router as report_router
 from backend.app.routes.analysis_routes import router as analysis_router
 from backend.app.routes.auth_routes import router as auth_router
+from backend.app.routes.imaging_routes import router as imaging_router
 
 app = FastAPI(
     title="HealthGuard AI — Multimodal Clinical Decision Support Platform",
@@ -24,6 +25,7 @@ app.include_router(analysis_router)
 app.include_router(heart_router)
 app.include_router(report_router)
 app.include_router(auth_router)
+app.include_router(imaging_router)
 
 @app.get("/health")
 def health_check():

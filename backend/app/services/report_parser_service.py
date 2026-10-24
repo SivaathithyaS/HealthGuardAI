@@ -394,8 +394,19 @@ class ReportParserService:
     def extract_text_from_pdf(self, pdf_bytes: bytes) -> str:
         try:
             reader = PdfReader(io.BytesIO(pdf_bytes))
-            text = "\n".join([page.extract_text() or "" for page in reader.pages])
-            return text
+            pages_text = []
+            for page in reader.pages:
+                try:
+                    # 'layout' mode accurately preserves multi-column and tabular spacing in radiology/lab reports
+                    t = page.extract_text(extraction_mode="layout")
+                except Exception:
+                    t = page.extract_text()
+                if t:
+                    pages_text.append(t)
+            full_text = "\n".join(pages_text)
+            # Clean up excessive null characters or weird binary artifacts
+            full_text = full_text.replace('\x00', '').strip()
+            return full_text
         except Exception as e:
             return f"PDF Extraction Error: {str(e)}"
 
@@ -409,6 +420,13 @@ class ReportParserService:
     def classify_document(self, text: str) -> Tuple[str, str, str]:
         t = text.lower()
         
+        # Pulmonology / Thoracic Imaging / Pneumonia detection
+        if any(k in t for k in [
+            "ct thorax", "hrct", "chest x-ray", "pneumonia", "lobar", 
+            "air bronchogram", "tree-in-bud", "pleural effusion", "consolidation"
+        ]):
+            return "ct_thorax", "Thoracic Radiology & Pulmonology CT/X-Ray", "pulmonology_respiratory"
+
         # Neuro-imaging / Brain MRI detection
         if any(k in t for k in [
             "mri brain", "brain parenchyma", "neuroradiology", "flair", 
@@ -428,22 +446,65 @@ class ReportParserService:
             "mrn": "N/A"
         }
         
-        name_match = re.search(r"patient(?:\s+name)?[:\s]+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)+)", text)
-        if name_match:
-            demo["name"] = name_match.group(1).strip()
-            
-        age_match = re.search(r"age\s*/\s*sex[:\s]+(\d{1,3})\s*(?:years|yrs)?\s*/\s*([a-zA-Z]+)", text, re.IGNORECASE)
-        if age_match:
-            demo["age"] = int(age_match.group(1))
-            demo["gender"] = age_match.group(2).strip().capitalize()
+        # 1. AGE EXTRACTION
+        patterns = [
+            r'\bAGE(?:\s*[/]\s*(?:GENDER|SEX))?[:\s]*(\d{1,3})\s*(?:Y(?:ears?|rs?)?|yo)?\b',
+            r'\bAge\s*[:\s]+(\d{1,3})\s*(?:Y(?:ears?|rs?)?|yo)?\b',
+            r'\b(\d{1,3})\s*(?:Y(?:ears?|rs?)?|yo)\s*(?:old)?\s*(?:/|,|\s)\s*(?:Female|Male|F|M)\b',
+            r'\b(\d{1,3})[\s-]*(?:years?|yrs?|yo)[\s-]*(?:old)?\s*(?:female|male|woman|man)\b',
+            r'\b(\d{1,3})\s*/\s*(?:F|M|Female|Male)\b'
+        ]
+        for pat in patterns:
+            m = re.search(pat, text, re.IGNORECASE)
+            if m:
+                val = int(m.group(1))
+                if 1 <= val <= 115:
+                    demo["age"] = val
+                    break
+
+        # 2. GENDER EXTRACTION
+        g_patterns = [
+            r'\bAGE\s*[/]\s*(?:GENDER|SEX)\b[^\n\r]*?/\s*(Female|Male|F|M)\b',
+            r'\b(?:GENDER|SEX)\b(?:\s*[:\s/]+)?(?:(?:\d{1,3}\s*(?:Y|yrs?|years?|yo)?)\s*[:\s/]+)?(FEMALE|MALE|WOMAN|MAN|F|M)\b',
+            r'/\s*(Female|Male)\b',
+            r'\b(?:Sex|Gender)\s*[:\s]+(Female|Male|F|M)\b',
+            r'\b\d{1,3}[\s-]*(?:years?|yrs?|yo)[\s-]*(?:old)?\s*(female|male|woman|man)\b'
+        ]
+        for pat in g_patterns:
+            m = re.search(pat, text, re.IGNORECASE)
+            if m:
+                matched = m.group(1).upper()
+                if matched in ['FEMALE', 'WOMAN', 'F']:
+                    demo["gender"] = "Female"
+                    break
+                elif matched in ['MALE', 'MAN', 'M']:
+                    demo["gender"] = "Male"
+                    break
+        if demo["gender"] == "Unknown" and re.search(r'\b(?:Mrs\.|Ms\.)\s+[A-Z]', text, re.IGNORECASE):
+            demo["gender"] = "Female"
+
+        # 3. PATIENT NAME EXTRACTION
+        name_patterns = [
+            r'\b(?:PATIENT(?:\s+NAME)?|PT\s+NAME|NAME)\s*[:\s]+([A-Za-z\s\.\(\)\'-]+?)(?=(?:\s{2,}|\s+(?:MRN|PID|Age|Sex|Gender|DOB|Study|Accession|Exam|Ward|Bed|Priority|Status)\b|$|\n))',
+            r'\bPatient\s*:\s*([A-Za-z\s\.\(\)\'-]+?)(?=(?:\s{2,}|MRN|Age|\n|$))'
+        ]
+        for pat in name_patterns:
+            m = re.search(pat, text, re.IGNORECASE)
+            if m:
+                cand = m.group(1).strip()
+                cand = re.sub(r'\s+', ' ', cand)
+                if len(cand) > 2 and 'fabricated' not in cand.lower() and cand.lower() not in ['information', 'demographics', 'details']:
+                    demo["name"] = cand
+                    break
+
+        # 4. MRN / PATIENT ID / ACCESSION
+        m_mrn = re.search(r'\b(?:MRN\s*(?:/\s*PID)?|PATIENT\s*ID|PID|MRN)\s*[:\s]+([A-Za-z0-9-]+)', text, re.I)
+        if m_mrn:
+            demo["mrn"] = m_mrn.group(1).strip()
         else:
-            a_match = re.search(r"age[:\s]+(\d{1,3})", text, re.IGNORECASE)
-            if a_match and int(a_match.group(1)) < 110:
-                demo["age"] = int(a_match.group(1))
-                
-        mrn_match = re.search(r"(?:mrn|patient\s+id)[:\s]+([a-zA-Z0-9\-]+)", text, re.IGNORECASE)
-        if mrn_match:
-            demo["mrn"] = mrn_match.group(1).strip()
+            m_acc = re.search(r'\bACCESSION(?:\s*NO\.?|\s*NUMBER)?\s*[:\s]+([A-Za-z0-9-]+)', text, re.I)
+            if m_acc and m_acc.group(1).upper() != 'NO':
+                demo["mrn"] = m_acc.group(1).strip()
 
         return demo
 

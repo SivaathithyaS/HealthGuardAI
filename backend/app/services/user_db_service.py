@@ -102,14 +102,24 @@ class UserDBService:
             return False
 
     def _seed_default_accounts(self):
+        # Default clinician demo account
         clinician_email = "clinician@healthguard.ai"
-        user = self.get_user_by_email(clinician_email)
-        if not user:
+        if not self.get_user_by_email(clinician_email):
             self.create_user(
                 email=clinician_email,
                 name="Dr. Sarah Lin, MD",
                 password="Password123!",
                 role="Clinician"
+            )
+
+        # Demo patient account — shown in README for quick testing
+        demo_email = "test@gmail.com"
+        if not self.get_user_by_email(demo_email):
+            self.create_user(
+                email=demo_email,
+                name="test1",
+                password="test",
+                role="Patient"
             )
 
     # -------------------------------------------------------------------------

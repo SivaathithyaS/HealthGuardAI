@@ -84,19 +84,32 @@ function DeltaBadge({ delta }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // CheckupCard
 // ─────────────────────────────────────────────────────────────────────────────
-function CheckupCard({ checkup }) {
+function CheckupCard({ checkup, onDelete }) {
   const [expanded, setExpanded] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const meta = getModalityMeta(checkup.modality);
   const IconComp = meta.icon;
-  const rc = riskColor(checkup.risk_score);
+  const numScore = typeof checkup.risk_score === 'number' 
+    ? checkup.risk_score 
+    : (parseFloat(checkup.risk_score) || 0);
+  const rc = riskColor(numScore);
+
+  const handleDelete = (e) => {
+    e.stopPropagation();
+    if (window.confirm(`Delete checkup record "${checkup.title}"?`)) {
+      setDeleting(true);
+      onDelete(checkup.id);
+    }
+  };
 
   return (
     <div style={{
-      background: 'var(--bg-card, rgba(255,255,255,0.04))',
-      border: '1px solid var(--border-subtle, rgba(255,255,255,0.08))',
+      background: 'var(--bg-surface, #FFFFFF)',
+      border: '1px solid var(--border-default, #E3E6E2)',
       borderRadius: '12px',
       overflow: 'hidden',
-      transition: 'box-shadow 0.2s'
+      transition: 'box-shadow 0.2s',
+      opacity: deleting ? 0.4 : 1
     }}>
       {/* Header row */}
       <button
@@ -111,7 +124,7 @@ function CheckupCard({ checkup }) {
         {/* Modality icon */}
         <div style={{
           width: 36, height: 36, borderRadius: '8px', flexShrink: 0,
-          background: `${meta.color}1a`, display: 'flex', alignItems: 'center', justifyContent: 'center'
+          background: `${meta.color}14`, display: 'flex', alignItems: 'center', justifyContent: 'center'
         }}>
           <IconComp size={18} color={meta.color} />
         </div>
@@ -129,7 +142,7 @@ function CheckupCard({ checkup }) {
             {formatDate(checkup.created_at)}
             <span style={{
               marginLeft: '6px', padding: '1px 7px', borderRadius: '10px', fontSize: '11px',
-              background: `${meta.color}20`, color: meta.color, fontWeight: 600
+              background: `${meta.color}15`, color: meta.color, fontWeight: 600
             }}>{meta.label}</span>
           </div>
         </div>
@@ -137,15 +150,29 @@ function CheckupCard({ checkup }) {
         {/* Risk score */}
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
           <div style={{ fontSize: '18px', fontWeight: 800, color: rc, lineHeight: 1 }}>
-            {checkup.risk_score.toFixed(1)}
+            {numScore.toFixed(1)}
           </div>
           <div style={{ fontSize: '10px', color: rc, fontWeight: 600, marginTop: '2px' }}>
-            {riskLabel(checkup.risk_score)}
+            {riskLabel(numScore)}
           </div>
         </div>
 
+        {/* Delete button */}
+        {onDelete && (
+          <div
+            onClick={handleDelete}
+            title="Delete checkup record"
+            style={{
+              padding: '6px', borderRadius: '6px', color: 'var(--text-muted)',
+              cursor: 'pointer', display: 'flex', alignItems: 'center'
+            }}
+          >
+            <span style={{ fontSize: '12px' }}>×</span>
+          </div>
+        )}
+
         {/* Expand toggle */}
-        <div style={{ color: 'var(--text-muted)', flexShrink: 0, marginLeft: '8px' }}>
+        <div style={{ color: 'var(--text-muted)', flexShrink: 0, marginLeft: '4px' }}>
           {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </div>
       </button>
@@ -234,7 +261,7 @@ function LongitudinalPanel({ data }) {
         <StatusIcon size={18} color={statusColor} />
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: '13px', fontWeight: 700, color: statusColor }}>
-            {data.trajectory_status.replace(/_/g, ' ')}
+            {(data.trajectory_status || 'STATUS_ESTABLISHED').replace(/_/g, ' ')}
           </div>
           <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
             {data.days_since_prior} days since last visit • {data.total_visits_recorded} total visits recorded
@@ -263,17 +290,19 @@ function LongitudinalPanel({ data }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Main HealthHistory export
 // ─────────────────────────────────────────────────────────────────────────────
-export default function HealthHistory({ user, token }) {
+export default function HealthHistory({ user, token, onNavigateToScanner }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  const effectiveToken = token || sessionStorage.getItem('healthguard_access_token') || 'demo-clinician-session';
 
   const fetchHistory = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const res = await fetch(`${API_BASE}/api/auth/history`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${effectiveToken}` }
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
@@ -283,49 +312,89 @@ export default function HealthHistory({ user, token }) {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [effectiveToken]);
 
   useEffect(() => { fetchHistory(); }, [fetchHistory]);
+
+  const handleDeleteCheckup = async (id) => {
+    try {
+      await fetch(`${API_BASE}/api/auth/history/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${effectiveToken}` }
+      });
+      fetchHistory();
+    } catch (err) {
+      console.error("Failed to delete checkup", err);
+    }
+  };
+
+  const handleClearHistory = async () => {
+    if (window.confirm("Are you sure you want to clear your entire checkup history?")) {
+      try {
+        await fetch(`${API_BASE}/api/auth/history`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${effectiveToken}` }
+        });
+        fetchHistory();
+      } catch (err) {
+        console.error("Failed to clear history", err);
+      }
+    }
+  };
 
   const checkups = data?.checkups || [];
   const longitudinal = data?.longitudinal || null;
 
   return (
-    <div style={{ maxWidth: '780px', margin: '0 auto', padding: '28px 20px' }}>
+    <div style={{ maxWidth: '820px', margin: '0 auto', padding: '16px 20px 40px' }}>
       {/* Header */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        marginBottom: '24px', flexWrap: 'wrap', gap: '12px'
+        marginBottom: '20px', flexWrap: 'wrap', gap: '12px'
       }}>
         <div>
           <h2 style={{
-            margin: 0, fontSize: '22px', fontWeight: 800,
+            margin: 0, fontSize: '20px', fontWeight: 700,
             color: 'var(--text-primary)',
             display: 'flex', alignItems: 'center', gap: '10px'
           }}>
-            <Calendar size={20} color="var(--accent-teal, #0e9f8e)" />
+            <Calendar size={18} color="var(--brand-accent)" />
             Personal Health History
           </h2>
           <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--text-muted)' }}>
-            Isolated timeline for {user?.name || user?.email} • {checkups.length} checkup{checkups.length !== 1 ? 's' : ''} recorded
+            Isolated longitudinal records for {user?.name || user?.email || 'Authenticated User'} • {checkups.length} recorded visit{checkups.length !== 1 ? 's' : ''}
           </p>
         </div>
 
-        <button
-          onClick={fetchHistory}
-          disabled={loading}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '7px',
-            padding: '8px 16px', borderRadius: '8px',
-            background: 'rgba(14,159,142,0.12)', border: '1px solid rgba(14,159,142,0.3)',
-            color: 'var(--accent-teal, #0e9f8e)', fontWeight: 600, fontSize: '13px',
-            cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1,
-            transition: 'all 0.2s'
-          }}
-        >
-          <RefreshCw size={14} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
-          {loading ? 'Loading…' : 'Refresh'}
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {checkups.length > 0 && (
+            <button
+              onClick={handleClearHistory}
+              style={{
+                padding: '7px 12px', borderRadius: '6px',
+                background: 'transparent', border: '1px solid var(--border-default)',
+                color: 'var(--text-muted)', fontSize: '12px', cursor: 'pointer'
+              }}
+            >
+              Clear all
+            </button>
+          )}
+
+          <button
+            onClick={fetchHistory}
+            disabled={loading}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              padding: '7px 14px', borderRadius: '6px',
+              background: 'var(--bg-surface)', border: '1px solid var(--border-default)',
+              color: 'var(--brand-ink)', fontWeight: 500, fontSize: '13px',
+              cursor: loading ? 'not-allowed' : 'pointer'
+            }}
+          >
+            <RefreshCw size={13} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </button>
+        </div>
       </div>
 
       {/* Error */}
@@ -365,7 +434,13 @@ export default function HealthHistory({ user, token }) {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {checkups.map(c => <CheckupCard key={c.id} checkup={c} />)}
+          {checkups.map(c => (
+            <CheckupCard 
+              key={c.id} 
+              checkup={c} 
+              onDelete={handleDeleteCheckup} 
+            />
+          ))}
         </div>
       )}
     </div>

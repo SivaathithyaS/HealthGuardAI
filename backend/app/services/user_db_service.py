@@ -122,6 +122,91 @@ class UserDBService:
                 role="Patient"
             )
 
+        # Seed initial clinical checkup history for demo accounts if empty
+        clinician = self.get_user_by_email(clinician_email)
+        if clinician and len(self.get_user_timeline(clinician["id"])) == 0:
+            self._seed_sample_checkups(clinician["id"])
+
+        patient = self.get_user_by_email(demo_email)
+        if patient and len(self.get_user_timeline(patient["id"])) == 0:
+            self._seed_sample_checkups(patient["id"])
+
+    def _seed_sample_checkups(self, user_id: str):
+        """Seeds two longitudinal checkup records (baseline + follow-up) so history tab shows trajectory analysis."""
+        from datetime import datetime, timedelta
+        now = datetime.utcnow()
+        t1 = (now - timedelta(days=42)).isoformat()
+        t2 = (now - timedelta(days=7)).isoformat()
+
+        # Visit 1: Baseline Visit
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+            INSERT INTO checkups (id, user_id, modality, title, summary, risk_score, biomarkers_json, findings_json, recommendations_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                f"chk_seed_1_{secrets.token_hex(4)}",
+                user_id,
+                "LAB_REPORT",
+                "Baseline Comprehensive Health Screening",
+                "Stage 1 systolic elevation and borderline dyslipidemia noted on initial clinical presentation.",
+                68.0,
+                json.dumps({
+                    "blood_pressure_systolic": 146.0,
+                    "blood_pressure_diastolic": 92.0,
+                    "total_cholesterol": 235.0,
+                    "ldl": 154.0,
+                    "fasting_glucose": 112.0,
+                    "hba1c": 6.1,
+                    "bmi": 29.8
+                }),
+                json.dumps([
+                    "Blood pressure elevated (146/92 mmHg) in Stage 1 hypertensive range",
+                    "Atherogenic lipid profile with Total Cholesterol 235 mg/dL, LDL 154 mg/dL",
+                    "Impaired fasting glucose (112 mg/dL) indicating pre-diabetes state"
+                ]),
+                json.dumps([
+                    "Initiate DASH low-sodium nutritional protocol (<1500mg/day)",
+                    "30 minutes moderate aerobic exercise 5x weekly",
+                    "Repeat metabolic & lipid panel in 6 weeks"
+                ]),
+                t1
+            ))
+
+            # Visit 2: Follow-up Visit (Improved trajectory)
+            cursor.execute("""
+            INSERT INTO checkups (id, user_id, modality, title, summary, risk_score, biomarkers_json, findings_json, recommendations_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                f"chk_seed_2_{secrets.token_hex(4)}",
+                user_id,
+                "LAB_REPORT",
+                "6-Week Follow-Up Cardiometabolic Evaluation",
+                "Clinically meaningful reduction in arterial blood pressure and fasting glucose following lifestyle intervention.",
+                28.0,
+                json.dumps({
+                    "blood_pressure_systolic": 126.0,
+                    "blood_pressure_diastolic": 80.0,
+                    "total_cholesterol": 198.0,
+                    "ldl": 122.0,
+                    "fasting_glucose": 96.0,
+                    "hba1c": 5.6,
+                    "bmi": 28.5
+                }),
+                json.dumps([
+                    "Normotensive blood pressure stabilization (126/80 mmHg, -20 mmHg systolic drop)",
+                    "Total cholesterol reduced to optimal range (<200 mg/dL)",
+                    "Glycemic normalization: fasting glucose 96 mg/dL, HbA1c 5.6%"
+                ]),
+                json.dumps([
+                    "Maintain current dietary modifications and weekly exercise regimen",
+                    "Continue home BP monitoring 2x weekly",
+                    "Routine annual clinical review in 12 months"
+                ]),
+                t2
+            ))
+            conn.commit()
+
     # -------------------------------------------------------------------------
     # USER & AUTHENTICATION METHODS
     # -------------------------------------------------------------------------
@@ -219,6 +304,16 @@ class UserDBService:
         """Returns the authenticated user dict if token is valid and active."""
         if not token:
             return None
+        # Support demo tokens so quick clinician demo has full access to history & features
+        if token == "demo-clinician-session":
+            clinician = self.get_user_by_email("clinician@healthguard.ai")
+            if clinician:
+                return clinician
+        if token == "demo-patient-session":
+            patient = self.get_user_by_email("test@gmail.com")
+            if patient:
+                return patient
+
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
@@ -237,6 +332,22 @@ class UserDBService:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM sessions WHERE token = ?", (token,))
             conn.commit()
+
+    def delete_user_checkup(self, user_id: str, checkup_id: str) -> bool:
+        """Deletes a specific checkup strictly belonging to user_id."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM checkups WHERE id = ? AND user_id = ?", (checkup_id, user_id))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def clear_user_checkups(self, user_id: str) -> bool:
+        """Clears all checkup history strictly belonging to user_id."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM checkups WHERE user_id = ?", (user_id,))
+            conn.commit()
+            return cursor.rowcount > 0
 
     # -------------------------------------------------------------------------
     # ISOLATED CHECKUP HISTORY & TIMELINE (STRICTLY FILTERED BY USER_ID)

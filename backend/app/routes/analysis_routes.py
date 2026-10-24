@@ -1,11 +1,11 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Header, Query
 from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
 import joblib
 import os
 import pandas as pd
 import numpy as np
-from datetime import datetime,timezone
+from datetime import datetime, timezone
 
 from backend.app.services.universal_disease_service import universal_disease_service
 from backend.app.schemas.universal_disease import UniversalDiseaseAnalysisResult
@@ -20,7 +20,55 @@ from backend.app.services.report_parser_service import (
     RIVERBEND_DEMO_REPORT
 )
 from backend.app.services.multi_disease_service import multi_disease_service, UnifiedAnalysisResponse
+from backend.app.services.user_db_service import user_db
 from backend.app.core.analysis_context import get_analysis_context
+
+def _try_save_analysis_checkup(result, authorization: Optional[str]):
+    """Auto-saves checkup into user's isolated history if request is authenticated."""
+    try:
+        if not authorization:
+            return
+        token = authorization.split(" ", 1)[1].strip() if authorization.lower().startswith("bearer ") else authorization.strip()
+        user = user_db.validate_session(token)
+        if not user:
+            return
+
+        biomarkers = {}
+        if hasattr(result, "extracted_parameters") and result.extracted_parameters:
+            for p in result.extracted_parameters:
+                try:
+                    val_str = str(p.value).split()[0].replace(',', '')
+                    biomarkers[p.name.lower().replace(' ', '_')] = float(val_str)
+                except Exception:
+                    pass
+
+        findings = []
+        if hasattr(result, "three_tier_evidence") and result.three_tier_evidence:
+            findings = [f"{t.feature_name}: {t.observed_finding} ({t.clinical_interpretation})" for t in result.three_tier_evidence[:4]]
+
+        recommendations = []
+        if hasattr(result, "short_term_routine") and result.short_term_routine:
+            recommendations.extend([f"{r.title}: {r.action}" for r in result.short_term_routine[:2]])
+        if hasattr(result, "long_term_routine") and result.long_term_routine:
+            recommendations.extend([f"{r.title}: {r.action}" for r in result.long_term_routine[:2]])
+
+        spec = getattr(result, "detected_specialty", "Clinical Assessment") or "LAB_REPORT"
+        cond = getattr(result, "primary_suspected_condition", "Clinical Screening")
+        score = float(getattr(result, "ai_evidence_score", 0.0) or 0.0)
+        acuity = getattr(result, "acuity_level", "Standard")
+
+        user_db.save_user_checkup(
+            user_id=user["id"],
+            modality=spec.upper().replace(' ', '_') if spec else "LAB_REPORT",
+            title=cond,
+            summary=f"AI evidence score: {score:.0f}/100 • Acuity: {acuity}",
+            risk_score=score,
+            biomarkers=biomarkers,
+            findings=findings,
+            recommendations=recommendations
+        )
+    except Exception as e:
+        print(f"[AutoSaveCheckup Warning] {e}")
 
 router = APIRouter(prefix="/api", tags=["Multimodal Clinical Intelligence"])
 
@@ -37,10 +85,17 @@ def classify_document_endpoint(req: TextAnalysisRequest):
     return document_classifier.classify(req.text)
 
 @router.post("/analysis/universal", response_model=UniversalDiseaseAnalysisResult)
-def start_universal_analysis_text(req: TextAnalysisRequest):
+def start_universal_analysis_text(
+    req: TextAnalysisRequest,
+    save_to_history: bool = Query(default=False),
+    authorization: Optional[str] = Header(default=None)
+):
     if not req.text or len(req.text.strip()) < 10:
         raise HTTPException(status_code=400, detail="Clinical report text is too short or empty.")
-    return universal_disease_service.analyze_clinical_text(req.text)
+    result = universal_disease_service.analyze_clinical_text(req.text)
+    if save_to_history:
+        _try_save_analysis_checkup(result, authorization)
+    return result
 
 @router.post("/analysis/start", response_model=UnifiedAnalysisResponse)
 def start_unified_analysis_text(req: TextAnalysisRequest):
@@ -49,7 +104,11 @@ def start_unified_analysis_text(req: TextAnalysisRequest):
     return multi_disease_service.run_analysis(req.text)
 
 @router.post("/analysis/upload", response_model=UniversalDiseaseAnalysisResult)
-async def start_analysis_upload(file: UploadFile = File(...)):
+async def start_analysis_upload(
+    file: UploadFile = File(...),
+    save_to_history: bool = Query(default=True),
+    authorization: Optional[str] = Header(default=None)
+):
     try:
         contents = await file.read()
         filename = file.filename.lower() if file.filename else ""
@@ -67,7 +126,10 @@ async def start_analysis_upload(file: UploadFile = File(...)):
         if not extracted_text or len(extracted_text.strip()) < 10:
             raise HTTPException(status_code=400, detail="Could not extract readable text from the uploaded document.")
 
-        return universal_disease_service.analyze_clinical_text(extracted_text)
+        result = universal_disease_service.analyze_clinical_text(extracted_text)
+        if save_to_history:
+            _try_save_analysis_checkup(result, authorization)
+        return result
     except HTTPException:
         raise
     except Exception as e:

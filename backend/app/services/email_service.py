@@ -1,20 +1,57 @@
 import os
 import smtplib
+from pathlib import Path
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass
+
+def _ensure_env_loaded():
+    """Locate and load .env from project root or candidate directories."""
+    candidates = [
+        Path(__file__).resolve().parent.parent.parent.parent / ".env",
+        Path(__file__).resolve().parent.parent.parent / ".env",
+        Path.cwd() / ".env",
+        Path.cwd().parent / ".env"
+    ]
+    for p in candidates:
+        if p.is_file():
+            try:
+                from dotenv import load_dotenv
+                load_dotenv(dotenv_path=p, override=False)
+                break
+            except ImportError:
+                pass
+
+_ensure_env_loaded()
 
 class EmailService:
     def __init__(self):
-        self.smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
-        self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
-        self.smtp_user = os.getenv("SMTP_USER", "").strip()
-        self.smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
-        self.from_name = os.getenv("SMTP_FROM_NAME", "HealthGuard AI Security")
+        _ensure_env_loaded()
+
+    @property
+    def smtp_host(self) -> str:
+        _ensure_env_loaded()
+        return os.getenv("SMTP_HOST", "smtp.gmail.com").strip()
+
+    @property
+    def smtp_port(self) -> int:
+        try:
+            return int(os.getenv("SMTP_PORT", "587"))
+        except (ValueError, TypeError):
+            return 587
+
+    @property
+    def smtp_user(self) -> str:
+        _ensure_env_loaded()
+        return os.getenv("SMTP_USER", "").strip()
+
+    @property
+    def smtp_password(self) -> str:
+        _ensure_env_loaded()
+        return os.getenv("SMTP_PASSWORD", "").strip()
+
+    @property
+    def from_name(self) -> str:
+        return os.getenv("SMTP_FROM_NAME", "HealthGuard AI Security").strip()
 
     def is_configured(self) -> bool:
         """Returns True if sender credentials have been provided in environment or .env file."""
@@ -113,14 +150,22 @@ class EmailService:
                 server.ehlo()
                 server.starttls()
                 server.ehlo()
-                server.login(self.smtp_user, self.smtp_password)
+                # Try with provided password, fallback to spaces-removed app password format
+                try:
+                    server.login(self.smtp_user, self.smtp_password)
+                except smtplib.SMTPAuthenticationError:
+                    clean_pwd = self.smtp_password.replace(" ", "").strip()
+                    server.login(self.smtp_user, clean_pwd)
+
                 server.sendmail(self.smtp_user, [recipient_email], msg.as_string())
 
+            print(f"[EmailService] SUCCESS: Verification email sent to {recipient_email} (from {self.smtp_user})")
             return {
                 "sent": True,
                 "message": f"Real verification email dispatched successfully to {recipient_email}"
             }
         except Exception as e:
+            print(f"[EmailService] ERROR sending to {recipient_email}: {str(e)}")
             # Fallback if connection fails (e.g. incorrect App Password or blocked port)
             return {
                 "sent": False,

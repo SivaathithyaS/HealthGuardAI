@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   FileText, Upload, Sparkles, AlertCircle, CheckCircle2, AlertTriangle, 
   TrendingDown, Zap, Heart, Activity, Stethoscope, Droplet, 
-  RefreshCw, ShieldAlert, Check, Calendar, ArrowRight, Layers, User, Award, Brain, Target, ShieldCheck, BarChart3, Database, FileCheck, GitBranch, Compass, TestTube, Users, Clock, Shield, AlertOctagon, Flame, ChevronDown, ChevronUp, Sun, Moon, CalendarDays, Info, Edit3, Flag, BookOpen, Eye, HelpCircle
+  RefreshCw, ShieldAlert, Check, Calendar, ArrowRight, Layers, User, Award, Brain, Target, ShieldCheck, BarChart3, Database, FileCheck, GitBranch, Compass, TestTube, Users, Clock, Shield, AlertOctagon, Flame, ChevronDown, ChevronUp, Sun, Moon, CalendarDays, Info, Edit3, Flag, BookOpen, Eye, HelpCircle, LogOut
 } from 'lucide-react';
 
 import RubricModal from './components/RubricModal';
@@ -13,6 +13,7 @@ import AuditLogModal from './components/AuditLogModal';
 import OverrideModal from './components/OverrideModal';
 import ImagingView from './components/ImagingView';
 import HealthHistory from './components/HealthHistory';
+import PresetCasesView from './components/PresetCasesView';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -31,6 +32,20 @@ export default function App({ user = null, token = null, onSignOut = null }) {
   const [rubricModalData, setRubricModalData] = useState(null);
   const [auditLogModalOpen, setAuditLogModalOpen] = useState(false);
   const [overrideModalData, setOverrideModalData] = useState(null);
+
+  // Account Menu State
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (accountMenuRef.current && !accountMenuRef.current.contains(e.target)) {
+        setAccountMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Human-in-the-Loop Feedback Log
   const [feedbackLog, setFeedbackLog] = useState(() => {
@@ -84,7 +99,7 @@ export default function App({ user = null, token = null, onSignOut = null }) {
           setSampleReports(data.samples);
           setClinicalText(data.samples[0].text);
           setSelectedPresetId(data.samples[0].id);
-          executeUniversalAnalysis(data.samples[0].text);
+          executeUniversalAnalysis(data.samples[0].text, false);
         }
       })
       .catch(() => {});
@@ -197,7 +212,7 @@ export default function App({ user = null, token = null, onSignOut = null }) {
     } catch {}
   };
 
-  const executeUniversalAnalysis = async (textToScan = clinicalText) => {
+  const executeUniversalAnalysis = async (textToScan = clinicalText, saveToHistory = false) => {
     if (!textToScan || textToScan.trim().length < 10) {
       setAnalysisError('Please enter clinical notes, lab values, or imaging findings.');
       return;
@@ -210,9 +225,16 @@ export default function App({ user = null, token = null, onSignOut = null }) {
       await new Promise(r => setTimeout(r, 60));
       
       setPipelineStage('TRAVERSING_NODES');
-      const res = await fetch(`${API_BASE}/api/analysis/universal`, {
+      const effectiveToken = token || sessionStorage.getItem('healthguard_access_token');
+      const headers = { 'Content-Type': 'application/json' };
+      if (effectiveToken) {
+        headers['Authorization'] = `Bearer ${effectiveToken}`;
+      }
+
+      const queryParam = saveToHistory ? '?save_to_history=true' : '?save_to_history=false';
+      const res = await fetch(`${API_BASE}/api/analysis/universal${queryParam}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ text: textToScan })
       });
 
@@ -242,8 +264,15 @@ export default function App({ user = null, token = null, onSignOut = null }) {
 
     try {
       setPipelineStage('TRAVERSING_NODES');
-      const res = await fetch(`${API_BASE}/api/analysis/upload`, {
+      const effectiveToken = token || sessionStorage.getItem('healthguard_access_token');
+      const headers = {};
+      if (effectiveToken) {
+        headers['Authorization'] = `Bearer ${effectiveToken}`;
+      }
+
+      const res = await fetch(`${API_BASE}/api/analysis/upload?save_to_history=true`, {
         method: 'POST',
+        headers,
         body: formData
       });
 
@@ -310,230 +339,322 @@ export default function App({ user = null, token = null, onSignOut = null }) {
   };
 
   return (
-    <div className="app-container">
-      {/* Header */}
-      <header className="navbar">
-        <div className="brand">
-          <div className="brand-icon">
+    <div className="dashboard-layout">
+      {/* Sidebar Navigation */}
+      <aside className="dashboard-sidebar">
+        <div className="sidebar-brand">
+          <div className="sidebar-brand-icon">
             <Shield size={20} strokeWidth={1.5} />
           </div>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <span className="brand-title">HealthGuard AI</span>
-              <span className="brand-badge">Clinical Decision Support v1.0</span>
-            </div>
-            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              Advanced multi-specialty risk assessment powered by machine learning. Ingest reports for predictive analysis and customized reduction roadmaps.
-            </p>
+            <span className="sidebar-brand-title">HealthGuard AI</span>
+            <span className="sidebar-brand-badge">Clinical Decision Support</span>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-          {/* Dual View Mode Toggle */}
-          <div className="view-mode-toggle">
-            <button 
-              className={`view-mode-btn ${viewMode === 'clinician' ? 'active' : ''}`}
-              onClick={() => handleViewModeChange('clinician')}
-              title="Clinician View: Full multi-tier clinical evidence, decision trees, and parameters"
-            >
-              <Activity size={14} strokeWidth={1.5} />
-              <span>Clinician View</span>
-            </button>
-            <button 
-              className={`view-mode-btn ${viewMode === 'summary' ? 'active' : ''}`}
-              onClick={() => handleViewModeChange('summary')}
-              title="Summary View: Streamlined executive plain-language view without jargon"
-            >
-              <Eye size={14} strokeWidth={1.5} />
-              <span>Summary View</span>
-            </button>
-          </div>
-
-          {/* Clinician Review & Audit Trail Pill */}
+        <nav className="sidebar-nav">
+          <div className="sidebar-nav-section-title">Diagnostic Screening</div>
           <button 
-            className="status-pill"
-            style={{ cursor: 'pointer' }}
-            onClick={() => setAuditLogModalOpen(true)}
-            title="Open Clinician Feedback & Audit Trail"
+            type="button"
+            className={`sidebar-nav-item ${activeTab === 'universal' ? 'active' : ''}`}
+            onClick={() => setActiveTab('universal')}
           >
-            <ShieldCheck size={14} strokeWidth={1.5} />
-            <span>Audit Log ({feedbackLog.length})</span>
+            <FileText size={16} strokeWidth={1.5} />
+            <span>Universal Scanner</span>
           </button>
 
-          {/* Backend Status Pill */}
-          <div className={`status-pill ${serverOnline ? 'nominal' : ''}`}>
+          <button 
+            type="button"
+            className={`sidebar-nav-item ${activeTab === 'imaging' ? 'active' : ''}`}
+            onClick={() => setActiveTab('imaging')}
+          >
+            <Activity size={16} strokeWidth={1.5} />
+            <span>Imaging & Waveforms</span>
+          </button>
+
+          <button 
+            type="button"
+            className={`sidebar-nav-item ${activeTab === 'presets' ? 'active' : ''}`}
+            onClick={() => setActiveTab('presets')}
+          >
+            <BookOpen size={16} strokeWidth={1.5} />
+            <span>Pre-configured Reports</span>
+          </button>
+
+          <div className="sidebar-nav-section-title">Specialty Ensembles</div>
+          <button 
+            type="button"
+            className={`sidebar-nav-item ${activeTab === 'heart' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('heart'); if (!heartPred) handleHeartPredict(); }}
+          >
+            <Heart size={16} strokeWidth={1.5} />
+            <span>Cardiology Risk</span>
+          </button>
+
+          <button 
+            type="button"
+            className={`sidebar-nav-item ${activeTab === 'diabetes' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('diabetes'); if (!diabResult) handleDiabPredict(); }}
+          >
+            <Droplet size={16} strokeWidth={1.5} />
+            <span>Diabetes Risk</span>
+          </button>
+
+          <button 
+            type="button"
+            className={`sidebar-nav-item ${activeTab === 'model-card' ? 'active' : ''}`}
+            onClick={() => setActiveTab('model-card')}
+          >
+            <FileCheck size={16} strokeWidth={1.5} />
+            <span>Clinical Model Card</span>
+          </button>
+
+          <div className="sidebar-nav-section-title">Validation & History</div>
+          <button 
+            type="button"
+            className={`sidebar-nav-item ${activeTab === 'evaluation' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('evaluation'); if (!evalResults) runEvaluationHub(); }}
+          >
+            <BarChart3 size={16} strokeWidth={1.5} />
+            <span>Live Validation Hub</span>
+          </button>
+
+          <button 
+            type="button"
+            className={`sidebar-nav-item ${activeTab === 'history' ? 'active' : ''}`}
+            onClick={() => setActiveTab('history')}
+          >
+            <CalendarDays size={16} strokeWidth={1.5} />
+            <span>My Health History</span>
+          </button>
+        </nav>
+
+        <div className="sidebar-footer">
+          <div className={`status-pill ${serverOnline ? 'nominal' : ''}`} style={{ width: '100%', justifyContent: 'center' }}>
             <span 
               className="status-dot" 
               style={{ background: serverOnline ? 'var(--good-accent)' : 'var(--critical-accent)' }}
             />
             <span>{serverOnline ? 'System nominal' : 'Offline'}</span>
           </div>
+        </div>
+      </aside>
 
-          {/* User greeting + sign-out */}
-          {user && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <button
-                className="status-pill"
-                style={{ cursor: 'pointer', gap: '8px' }}
-                onClick={() => setActiveTab('history')}
-                title="View your personal health history"
+      {/* Main Content Area */}
+      <div className="dashboard-main">
+        {/* Top Header Bar */}
+        <header className="navbar">
+          <div>
+            <h1 className="navbar-page-title">
+              {activeTab === 'universal' && 'Universal Report Scanner & Prevention'}
+              {activeTab === 'imaging' && 'Clinical Imaging & Waveforms'}
+              {activeTab === 'presets' && 'Pre-configured Clinical Cases'}
+              {activeTab === 'heart' && 'Cardiology Risk Assessment'}
+              {activeTab === 'diabetes' && 'Diabetes Metabolic Risk Assessment'}
+              {activeTab === 'model-card' && 'Clinical Model Card Specification'}
+              {activeTab === 'evaluation' && 'Live Validation Benchmark Hub'}
+              {activeTab === 'history' && 'Personal Health History'}
+            </h1>
+            <p className="navbar-page-subtitle">
+              {activeTab === 'universal' && 'Multi-line entity extraction, 3-tier clinical hierarchy, and evidence-based prevention roadmaps.'}
+              {activeTab === 'imaging' && '1D-CNN ECG waveform analysis and DenseNet-121 Brain MRI GradCAM inference.'}
+              {activeTab === 'presets' && 'Standardized multi-specialty clinical benchmark scenarios with verified findings.'}
+              {activeTab === 'heart' && 'Cleveland Clinic 13-feature ensemble with TreeSHAP risk factor attribution.'}
+              {activeTab === 'diabetes' && 'Pima Indians metabolic biomarker ensemble with empirical confidence intervals.'}
+              {activeTab === 'model-card' && 'Specification of model architectures, training datasets, intended use, and limitations.'}
+              {activeTab === 'evaluation' && 'Blinded hospital test scenarios across oncology, stroke, cardiology, and metabolic disease.'}
+              {activeTab === 'history' && 'Per-user isolated timeline with visit-over-visit biomarker trajectory tracking.'}
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            {/* Dual View Mode Toggle */}
+            <div className="view-mode-toggle">
+              <button 
+                type="button"
+                className={`view-mode-btn ${viewMode === 'clinician' ? 'active' : ''}`}
+                onClick={() => handleViewModeChange('clinician')}
+                title="Clinician View: Full multi-tier clinical evidence, decision trees, and parameters"
               >
-                <User size={13} strokeWidth={1.5} />
-                <span style={{ maxWidth: '130px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {user.name || user.email}
-                </span>
+                <Activity size={13} strokeWidth={1.5} />
+                <span>Clinician View</span>
               </button>
-              {onSignOut && (
-                <button
-                  className="status-pill"
-                  style={{ cursor: 'pointer', color: 'var(--critical-accent, #ef4444)' }}
-                  onClick={onSignOut}
-                  title="Sign out"
-                >
-                  <span>Sign out</span>
-                </button>
+              <button 
+                type="button"
+                className={`view-mode-btn ${viewMode === 'summary' ? 'active' : ''}`}
+                onClick={() => handleViewModeChange('summary')}
+                title="Summary View: Streamlined executive plain-language view without jargon"
+              >
+                <Eye size={13} strokeWidth={1.5} />
+                <span>Summary View</span>
+              </button>
+            </div>
+
+            {/* Clinician Review & Audit Trail Pill */}
+            <button 
+              type="button"
+              className="status-pill"
+              style={{ cursor: 'pointer' }}
+              onClick={() => setAuditLogModalOpen(true)}
+              title="Open Clinician Feedback & Audit Trail"
+            >
+              <ShieldCheck size={14} strokeWidth={1.5} />
+              <span>Audit Log ({feedbackLog.length})</span>
+            </button>
+
+            {/* User Account Menu with Click-to-Open Signout Dropdown */}
+            <div className="account-dropdown-wrap" ref={accountMenuRef}>
+              <button
+                type="button"
+                className="account-trigger-btn"
+                onClick={() => setAccountMenuOpen(!accountMenuOpen)}
+                title="Account menu"
+              >
+                <div className="account-avatar">
+                  {(user?.name ? user.name[0] : (user?.email ? user.email[0] : 'U')).toUpperCase()}
+                </div>
+                <span className="account-label">
+                  {user?.name || user?.email || 'Dr. Sarah Lin'}
+                </span>
+                <ChevronDown size={13} className={`account-caret ${accountMenuOpen ? 'open' : ''}`} />
+              </button>
+
+              {accountMenuOpen && (
+                <div className="account-menu-popover">
+                  <div className="account-popover-info">
+                    <div className="account-popover-name">{user?.name || 'Dr. Sarah Lin, MD'}</div>
+                    <div className="account-popover-email">{user?.email || 'clinician@healthguard.ai'}</div>
+                    <span className="account-popover-role">{user?.role || 'Clinician'}</span>
+                  </div>
+                  <div className="account-popover-divider" />
+                  <button 
+                    type="button" 
+                    className="account-popover-item"
+                    onClick={() => { setActiveTab('history'); setAccountMenuOpen(false); }}
+                  >
+                    <CalendarDays size={14} />
+                    <span>My Health History</span>
+                  </button>
+                  <button 
+                    type="button" 
+                    className="account-popover-item"
+                    onClick={() => { setAuditLogModalOpen(true); setAccountMenuOpen(false); }}
+                  >
+                    <ShieldCheck size={14} />
+                    <span>Audit Trail Log</span>
+                  </button>
+                  <div className="account-popover-divider" />
+                  {onSignOut && (
+                    <button 
+                      type="button" 
+                      className="account-popover-item signout"
+                      onClick={() => { setAccountMenuOpen(false); onSignOut(); }}
+                    >
+                      <LogOut size={14} />
+                      <span>Sign out</span>
+                    </button>
+                  )}
+                </div>
               )}
             </div>
-          )}
-        </div>
-      </header>
 
-      {/* Secondary Navigation (Underline Tabs, No Emoji) */}
-      <nav className="tabs-header">
-        <button 
-          className={`tab-button ${activeTab === 'universal' ? 'active' : ''}`}
-          onClick={() => setActiveTab('universal')}
-        >
-          <FileText size={15} strokeWidth={1.5} />
-          <span>Universal Report Scanner & Prevention</span>
-        </button>
-
-        <button 
-          className={`tab-button ${activeTab === 'heart' ? 'active' : ''}`}
-          onClick={() => { setActiveTab('heart'); if (!heartPred) handleHeartPredict(); }}
-        >
-          <Heart size={15} strokeWidth={1.5} />
-          <span>Cardiology Risk Assessment</span>
-        </button>
-
-        <button 
-          className={`tab-button ${activeTab === 'diabetes' ? 'active' : ''}`}
-          onClick={() => { setActiveTab('diabetes'); if (!diabResult) handleDiabPredict(); }}
-        >
-          <Droplet size={15} strokeWidth={1.5} />
-          <span>Diabetes Risk Assessment</span>
-        </button>
-
-        <button 
-          className={`tab-button ${activeTab === 'evaluation' ? 'active' : ''}`}
-          onClick={() => { setActiveTab('evaluation'); if (!evalResults) runEvaluationHub(); }}
-        >
-          <BarChart3 size={15} strokeWidth={1.5} />
-          <span>Live Validation Benchmark Hub</span>
-        </button>
-
-        <button 
-          className={`tab-button ${activeTab === 'model-card' ? 'active' : ''}`}
-          onClick={() => setActiveTab('model-card')}
-        >
-          <BookOpen size={15} strokeWidth={1.5} />
-          <span>Clinical Model Card</span>
-        </button>
-
-        <button 
-          className={`tab-button ${activeTab === 'imaging' ? 'active' : ''}`}
-          onClick={() => setActiveTab('imaging')}
-        >
-          <Activity size={15} strokeWidth={1.5} />
-          <span>Imaging & Waveforms</span>
-        </button>
-
-        {user && (
-          <button
-            className={`tab-button ${activeTab === 'history' ? 'active' : ''}`}
-            onClick={() => setActiveTab('history')}
-            style={{ marginLeft: 'auto' }}
-          >
-            <CalendarDays size={15} strokeWidth={1.5} />
-            <span>My Health History</span>
-          </button>
-        )}
-      </nav>
-
-      {/* ========================================================================= */}
-      {/* TAB 1: UNIVERSAL MULTI-DISEASE DIAGNOSTIC & REPORT SCANNER                */}
-      {/* ========================================================================= */}
-      {activeTab === 'universal' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
-          
-          {/* ========================================================================= */}
-          {/* TOP INTAKE BAR: FULL-WIDTH COMPACT CONTROLS                               */}
-          {/* ========================================================================= */}
-          <div className="intake-card">
-            <div className="intake-controls-row">
-              {/* Upload Dropzone Button */}
-              <div 
-                className="upload-mini-btn"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Upload size={18} />
-                <span>Upload PDF / Report</span>
-                <input 
-                  ref={fileInputRef}
-                  type="file" 
-                  accept=".pdf,.png,.jpg,.jpeg,.txt" 
-                  style={{ display: 'none' }}
-                  onChange={handleFileUpload}
-                />
-              </div>
-
-              {/* Preset Cases Scroll Row */}
-              <div className="presets-scroll-row">
-                {sampleReports.map(sample => (
-                  <button
-                    key={sample.id}
-                    className={`preset-chip ${selectedPresetId === sample.id ? 'active' : ''}`}
-                    onClick={() => {
-                      setSelectedPresetId(sample.id);
-                      setClinicalText(sample.text);
-                      executeUniversalAnalysis(sample.text);
-                    }}
-                  >
-                    <span className="preset-chip-title">
-                      {sample.title.replace(/^[^\w\s]+/, '').trim().split('—')[0]}
-                    </span>
-                    <span className="preset-chip-sub">{sample.specialty}</span>
-                  </button>
-                ))}
-              </div>
-
-              {/* Action Button */}
-              <button 
-                className="analyze-main-btn"
-                onClick={() => executeUniversalAnalysis()}
-                disabled={['CLASSIFYING', 'EXTRACTING', 'TRAVERSING_NODES'].includes(pipelineStage)}
-              >
-                {['CLASSIFYING', 'EXTRACTING', 'TRAVERSING_NODES'].includes(pipelineStage) ? (
-                  <>
-                    <RefreshCw className="animate-spin" size={15} strokeWidth={1.5} />
-                    <span>Analyzing...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles size={15} strokeWidth={1.5} />
-                    <span>Run Analysis</span>
-                  </>
-                )}
-              </button>
-            </div>
-
-            {analysisError && (
-              <div style={{ marginTop: '10px', padding: '10px 14px', background: 'var(--critical-bg)', border: '1px solid var(--critical-border)', borderRadius: '8px', color: 'var(--critical-text)', fontSize: '0.82rem' }}>
-                <AlertCircle size={15} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
-                {analysisError}
-              </div>
-            )}
           </div>
+        </header>
+
+        {/* ========================================================================= */}
+        {/* TAB 1: UNIVERSAL MULTI-DISEASE DIAGNOSTIC & REPORT SCANNER                */}
+        {/* ========================================================================= */}
+        {activeTab === 'universal' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            
+            {/* INTAKE CARD: CLEAN WORKSPACE WITHOUT OVERCROWDED PRESET CHIPS */}
+            <div className="intake-card">
+              <div className="intake-controls-row">
+                {/* Upload Button */}
+                <div 
+                  className="upload-mini-btn"
+                  onClick={() => fileInputRef.current?.click()}
+                  title="Upload PDF, Image (PNG/JPG), or Text Report"
+                >
+                  <Upload size={18} />
+                  <div style={{ textAlign: 'left' }}>
+                    <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>Upload PDF / Report</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>PDF, JPG, PNG, TXT</div>
+                  </div>
+                  <input 
+                    ref={fileInputRef}
+                    type="file" 
+                    accept=".pdf,.png,.jpg,.jpeg,.txt" 
+                    style={{ display: 'none' }}
+                    onChange={handleFileUpload}
+                  />
+                </div>
+
+                {/* Clinical Notes / Report Text Preview Area */}
+                <div className="intake-text-input-wrap">
+                  <textarea
+                    className="intake-textarea"
+                    rows={2}
+                    value={clinicalText}
+                    onChange={(e) => setClinicalText(e.target.value)}
+                    placeholder="Paste clinical report notes, lab biomarkers, or imaging findings here..."
+                  />
+                  <div className="intake-text-footer">
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                      {clinicalText.length > 0 ? `${clinicalText.split(/\s+/).filter(Boolean).length} words loaded` : 'No report loaded yet'}
+                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      {clinicalText && (
+                        <button
+                          type="button"
+                          onClick={() => setClinicalText('')}
+                          className="intake-clear-btn"
+                          title="Clear report text"
+                        >
+                          Clear
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('presets')}
+                        className="intake-preset-link"
+                        title="Browse Pre-configured Clinical Cases"
+                      >
+                        <BookOpen size={12} />
+                        <span>Browse Pre-configured Cases →</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Action Button */}
+                <button 
+                  type="button"
+                  className="analyze-main-btn"
+                  onClick={() => executeUniversalAnalysis(clinicalText, true)}
+                  disabled={['CLASSIFYING', 'EXTRACTING', 'TRAVERSING_NODES'].includes(pipelineStage)}
+                >
+                  {['CLASSIFYING', 'EXTRACTING', 'TRAVERSING_NODES'].includes(pipelineStage) ? (
+                    <>
+                      <RefreshCw className="animate-spin" size={15} strokeWidth={1.5} />
+                      <span>Analyzing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FileText size={15} strokeWidth={1.5} />
+                      <span>Run Analysis</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {analysisError && (
+                <div style={{ marginTop: '10px', padding: '10px 14px', background: 'var(--critical-bg)', border: '1px solid var(--critical-border)', borderRadius: '8px', color: 'var(--critical-text)', fontSize: '0.82rem' }}>
+                  <AlertCircle size={15} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
+                  {analysisError}
+                </div>
+              )}
+            </div>
 
           {/* ========================================================================= */}
           {/* FULL-WIDTH OUTPUT DASHBOARD (SPANS 100% OF SCREEN)                       */}
@@ -1377,10 +1498,33 @@ export default function App({ user = null, token = null, onSignOut = null }) {
       )}
 
       {/* ========================================================================= */}
+      {/* TAB: PRE-CONFIGURED CLINICAL CASES (SEPARATE DEDICATED TAB)              */}
+      {/* ========================================================================= */}
+      {activeTab === 'presets' && (
+        <PresetCasesView 
+          samples={sampleReports}
+          onSelectCase={(sample) => {
+            setSelectedPresetId(sample.id);
+            setClinicalText(sample.text);
+            setActiveTab('universal');
+          }}
+          onRunAnalysis={(sampleText) => {
+            setClinicalText(sampleText);
+            setActiveTab('universal');
+            executeUniversalAnalysis(sampleText, true);
+          }}
+        />
+      )}
+
+      {/* ========================================================================= */}
       {/* TAB 7: PERSONAL HEALTH HISTORY (per-user, isolated)                       */}
       {/* ========================================================================= */}
-      {activeTab === 'history' && user && (
-        <HealthHistory user={user} token={token} />
+      {activeTab === 'history' && (
+        <HealthHistory 
+          user={user} 
+          token={token} 
+          onNavigateToScanner={() => setActiveTab('universal')}
+        />
       )}
 
       {/* Footer */}
@@ -1389,6 +1533,7 @@ export default function App({ user = null, token = null, onSignOut = null }) {
           <strong>HealthGuard AI — Clinical Decision Support & Prevention Prototype:</strong> Designed for clinical education and workflow decision support. AI evidence scores and decision tree traversal paths do not replace formal in-person diagnostic evaluation or physician judgment.
         </p>
       </footer>
+      </div>
 
       {/* Modals & Dialogs */}
       <RubricModal 

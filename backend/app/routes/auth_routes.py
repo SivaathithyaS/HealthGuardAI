@@ -47,6 +47,16 @@ class ForgotPasswordRequest(BaseModel):
     email: str
 
 
+class SaveCheckupRequest(BaseModel):
+    modality: str = "LAB_REPORT"
+    title: str
+    summary: str
+    risk_score: float = 0.0
+    biomarkers: Optional[dict] = None
+    findings: Optional[list] = None
+    recommendations: Optional[list] = None
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Helper: resolve calling user from Authorization header
 # ─────────────────────────────────────────────────────────────────────────────
@@ -248,6 +258,50 @@ def get_my_history(
         "longitudinal": comparison,
         "total": len(timeline)
     }
+
+
+@router.post("/save-checkup")
+def save_checkup(
+    req: SaveCheckupRequest,
+    authorization: Optional[str] = Header(default=None)
+):
+    """Saves a checkup report directly into the authenticated user's isolated history."""
+    user = _require_auth(authorization)
+    saved = user_db.save_user_checkup(
+        user_id=user["id"],
+        modality=req.modality,
+        title=req.title,
+        summary=req.summary,
+        risk_score=req.risk_score,
+        biomarkers=req.biomarkers,
+        findings=req.findings,
+        recommendations=req.recommendations
+    )
+    return {"status": "success", "checkup": saved}
+
+
+@router.delete("/history/{checkup_id}")
+def delete_checkup_endpoint(
+    checkup_id: str,
+    authorization: Optional[str] = Header(default=None)
+):
+    """Deletes a specific checkup belonging to the authenticated user."""
+    user = _require_auth(authorization)
+    deleted = user_db.delete_user_checkup(user["id"], checkup_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Checkup not found or already deleted."
+        )
+    return {"status": "success", "message": "Checkup deleted successfully."}
+
+
+@router.delete("/history")
+def clear_history_endpoint(authorization: Optional[str] = Header(default=None)):
+    """Clears all checkup history belonging to the authenticated user."""
+    user = _require_auth(authorization)
+    user_db.clear_user_checkups(user["id"])
+    return {"status": "success", "message": "Checkup history cleared successfully."}
 
 
 # ─────────────────────────────────────────────────────────────────────────────

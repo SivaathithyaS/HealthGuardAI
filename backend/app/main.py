@@ -1,3 +1,17 @@
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Reliably locate and load .env regardless of CWD or command
+for candidate in [
+    Path(__file__).resolve().parent.parent.parent / ".env",
+    Path.cwd() / ".env",
+    Path(__file__).resolve().parent.parent / ".env"
+]:
+    if candidate.is_file():
+        load_dotenv(dotenv_path=candidate, override=True)
+        break
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.app.routes.heart_routes import router as heart_router

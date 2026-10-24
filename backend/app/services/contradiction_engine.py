@@ -149,7 +149,7 @@ RULES: List[ContradictionRule] = [
         explanation_fn=lambda _: (
             "The Right MCA occlusion anatomically explains the left-sided hemiparesis. "
             "However, expressive language impairment (Broca's aphasia) is predominantly localized to the "
-            "dominant cerebral hemisphere (typically left hemisphere in >95% of right-handed individuals and >70% of left-handed individuals)."
+            "dominant hemisphere (typically left hemisphere in >95% of right-handed individuals and >70% of left-handed individuals)."
         ),
         guidance_fn=lambda _: (
             "Reconcile clinical laterality and language dominance (e.g. assess for non-dominant right-hemisphere language dominance, "

@@ -1,0 +1,16 @@
+{
+  "name": "mri_cnn",
+  "modality": "mri",
+  "model_version": "mri-cnn-v1-stub",
+  "stub": true,
+  "threshold": 0.6,
+  "weights_file": "weights.pt",
+  "weights_sha256": "a9f187ae6935287e1fe29af2701242125781d7377b4c2886698e3392b349bba3",
+  "labels": [
+    "No Acute Intra-Axial Abnormality",
+    "High-Grade Glioma / Neoplasm",
+    "Acute Ischemic Infarct",
+    "Intracranial Hemorrhage"
+  ],
+  "description": "DenseNet-121 2D/3D CNN for Axial T1-Gd/T2-FLAIR brain MRI slices with Grad-CAM feature attribution."
+}

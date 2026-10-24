@@ -1,12 +1,12 @@
 import re
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from pydantic import BaseModel
 
 class ProvenanceItem(BaseModel):
     feature: str
     feature_name: str
     value: Any
-    unit: Optional_str = ""
+    unit: str = ""
     source_section: str
     source_text: str
     confidence: float

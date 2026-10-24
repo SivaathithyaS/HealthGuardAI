@@ -5,6 +5,7 @@ import joblib
 import os
 import pandas as pd
 import numpy as np
+from datetime import datetime,timezone
 
 from backend.app.services.universal_disease_service import universal_disease_service
 from backend.app.schemas.universal_disease import UniversalDiseaseAnalysisResult
@@ -18,6 +19,7 @@ from backend.app.services.report_parser_service import (
     report_parser_service, NORTHSTAR_STROKE_CT_CTA_REPORT, NORTHSTAR_BRAIN_MRI_REPORT, 
     RIVERBEND_DEMO_REPORT
 )
+from backend.app.services.multi_disease_service import multi_disease_service, UnifiedAnalysisResponse
 from backend.app.core.analysis_context import get_analysis_context
 
 router = APIRouter(prefix="/api", tags=["Multimodal Clinical Intelligence"])
@@ -30,12 +32,21 @@ class TextAnalysisRequest(BaseModel):
 # -------------------------------------------------------------
 # 1. UNIVERSAL DISEASE & REPORT ANALYSIS ENDPOINTS
 # -------------------------------------------------------------
+@router.post("/documents/classify")
+def classify_document_endpoint(req: TextAnalysisRequest):
+    return document_classifier.classify(req.text)
+
 @router.post("/analysis/universal", response_model=UniversalDiseaseAnalysisResult)
-@router.post("/analysis/start", response_model=UniversalDiseaseAnalysisResult)
 def start_universal_analysis_text(req: TextAnalysisRequest):
     if not req.text or len(req.text.strip()) < 10:
         raise HTTPException(status_code=400, detail="Clinical report text is too short or empty.")
     return universal_disease_service.analyze_clinical_text(req.text)
+
+@router.post("/analysis/start", response_model=UnifiedAnalysisResponse)
+def start_unified_analysis_text(req: TextAnalysisRequest):
+    if not req.text or len(req.text.strip()) < 10:
+        raise HTTPException(status_code=400, detail="Clinical report text is too short or empty.")
+    return multi_disease_service.run_analysis(req.text)
 
 @router.post("/analysis/upload", response_model=UniversalDiseaseAnalysisResult)
 async def start_analysis_upload(file: UploadFile = File(...)):
@@ -233,9 +244,57 @@ Clinical Impressions: Patient presents with persistent lethargy, cold intoleranc
             {
                 "id": "riverbend_demo_case",
                 "specialty": "Cardiology & Metabolism",
-                "title": "📋 Stage 2 Hypertension & Metabolic Syndrome (Aarav Mehta - 52yo M)",
+                "title": "Stage 2 Hypertension & Metabolic Syndrome (Aarav Mehta - 52yo M)",
                 "description": "BP 148/94 mmHg, Total Chol 238, LDL 158, Trig 205, Glucose 118, HbA1c 6.2%, BMI 30.3.",
                 "text": RIVERBEND_DEMO_REPORT
+            },
+            {
+                "id": "veridian_ct_thorax_case",
+                "specialty": "Pulmonology / Thoracic Imaging",
+                "title": "Lobar Pneumonia & Pleural Effusion (Sunita Kapoor - 54yo F)",
+                "description": "HRCT 128-slice: Right lower lobe dense consolidation with air bronchograms, 14mm effusion, SpO2 91%.",
+                "text": """VERIDIAN INSTITUTE OF MEDICAL SCIENCES
+Department of Radiodiagnosis & Imaging Sciences 7, Sample Avenue, Example City - 500000
+Tel: 0000-000 0000 | radiology@veridian.example
+Page 1
+RADIOLOGY REPORT - CT THORAX (HRCT) & CHEST X-RAY PA
+PATIENT NAME Mrs. SUNITA KAPOOR MRN / PID VIMS-RD-7731902
+AGE / GENDER 54 Y / Female ACCESSION NO. ACC-20261022-0457
+REFERRING
+PHYSICIAN Dr. R. Menon, Pulmonology EXAM DATE / TIME 22-Oct-2026 / 10:15
+WARD / BED Medical Ward 3 / Bed 12 REPORT DATE / TIME 22-Oct-2026 / 13:40
+MODALITY DX (X-Ray), CT 128-slice CONTRAST Non-contrast
+CLINICAL HISTORY
+Fever with productive cough for 6 days, right-sided pleuritic chest pain. SpO2 91% on room air. Known type 2 diabetic. ?
+Community-acquired pneumonia. Rule out effusion / empyema.
+COMPARISON
+No prior imaging available for comparison.
+TECHNIQUE
+PA chest radiograph in erect position. Non-contrast volumetric CT of the thorax acquired from lung apices to the adrenal
+glands; 1 mm reconstructions in lung and mediastinal windows; multiplanar reformats reviewed. DLP: 342 mGy-cm.
+FINDINGS
+Chest radiograph: Homogeneous airspace opacity in the right lower zone with air bronchograms, obscuring the right
+hemidiaphragm. Blunting of the right costophrenic angle. Left lung is clear. Cardiac size is normal (CTR 0.46).
+Lungs / airways: Dense consolidation involving the posterior and lateral basal segments of the right lower lobe with prominent
+air bronchograms. Adjacent ground-glass opacities and a few centrilobular tree-in-bud nodules in the right middle lobe,
+suggesting endobronchial spread. No cavitation. No evidence of pneumothorax. Left lung parenchyma is unremarkable. Central
+airways are patent.
+Pleura: Small right-sided pleural effusion, maximum thickness 14 mm, simple density (approx. 8 HU). No pleural thickening
+or enhancement is assessable on this non-contrast study. No loculation.
+Mediastinum / lymph nodes: Reactive right hilar and subcarinal lymph nodes, largest 12 x 9 mm (short axis). No
+pathologically enlarged mediastinal nodes. Heart size normal; no pericardial effusion. Thoracic aorta and main pulmonary
+artery are of normal calibre.
+Upper abdomen / bones: Visualised upper abdomen shows mild hepatic steatosis. No focal lytic or sclerotic lesion in the
+visualised skeleton. Mild degenerative changes in the dorsal spine.
+IMPRESSION
+1. Right lower lobe lobar pneumonia with air bronchograms, in keeping with the clinical suspicion of infective
+consolidation.
+2. Associated small right parapneumonic effusion (14 mm), simple; no loculation. Clinical correlation /
+ultrasound-guided sampling only if it enlarges.
+3. Tree-in-bud nodularity in the right middle lobe - likely endobronchial spread of infection.
+4. Reactive right hilar and subcarinal lymph nodes. No mass lesion identified.
+5. Follow-up chest radiograph in 6 weeks is advised to document complete resolution.
+Findings discussed with Dr. R. Menon on 22-Oct-2026 at 13:45."""
             }
         ]
     }

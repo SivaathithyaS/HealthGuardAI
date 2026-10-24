@@ -11,6 +11,7 @@ import BenchmarkHubView from './components/BenchmarkHubView';
 import ModelCardView from './components/ModelCardView';
 import AuditLogModal from './components/AuditLogModal';
 import OverrideModal from './components/OverrideModal';
+import ImagingView from './components/ImagingView';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -409,6 +410,14 @@ export default function App() {
         >
           <BookOpen size={15} strokeWidth={1.5} />
           <span>Clinical Model Card</span>
+        </button>
+
+        <button 
+          className={`tab-button ${activeTab === 'imaging' ? 'active' : ''}`}
+          onClick={() => setActiveTab('imaging')}
+        >
+          <Activity size={15} strokeWidth={1.5} />
+          <span>Imaging & Waveforms</span>
         </button>
       </nav>
 
@@ -1319,6 +1328,13 @@ export default function App() {
             if (!evalResults) runEvaluationHub(); 
           }} 
         />
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 6: CLINICAL IMAGING & WAVEFORMS (1D-CNN & DENSENET-121)               */}
+      {/* ========================================================================= */}
+      {activeTab === 'imaging' && (
+        <ImagingView apiBase={API_BASE} />
       )}
 
       {/* Footer */}

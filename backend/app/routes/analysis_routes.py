@@ -5,6 +5,7 @@ import joblib
 import os
 import pandas as pd
 import numpy as np
+from datetime import datetime,timezone
 
 from backend.app.services.universal_disease_service import universal_disease_service
 from backend.app.schemas.universal_disease import UniversalDiseaseAnalysisResult
@@ -18,6 +19,7 @@ from backend.app.services.report_parser_service import (
     report_parser_service, NORTHSTAR_STROKE_CT_CTA_REPORT, NORTHSTAR_BRAIN_MRI_REPORT, 
     RIVERBEND_DEMO_REPORT
 )
+from backend.app.services.multi_disease_service import multi_disease_service, UnifiedAnalysisResponse
 from backend.app.core.analysis_context import get_analysis_context
 
 router = APIRouter(prefix="/api", tags=["Multimodal Clinical Intelligence"])
@@ -30,12 +32,21 @@ class TextAnalysisRequest(BaseModel):
 # -------------------------------------------------------------
 # 1. UNIVERSAL DISEASE & REPORT ANALYSIS ENDPOINTS
 # -------------------------------------------------------------
+@router.post("/documents/classify")
+def classify_document_endpoint(req: TextAnalysisRequest):
+    return document_classifier.classify(req.text)
+
 @router.post("/analysis/universal", response_model=UniversalDiseaseAnalysisResult)
-@router.post("/analysis/start", response_model=UniversalDiseaseAnalysisResult)
 def start_universal_analysis_text(req: TextAnalysisRequest):
     if not req.text or len(req.text.strip()) < 10:
         raise HTTPException(status_code=400, detail="Clinical report text is too short or empty.")
     return universal_disease_service.analyze_clinical_text(req.text)
+
+@router.post("/analysis/start", response_model=UnifiedAnalysisResponse)
+def start_unified_analysis_text(req: TextAnalysisRequest):
+    if not req.text or len(req.text.strip()) < 10:
+        raise HTTPException(status_code=400, detail="Clinical report text is too short or empty.")
+    return multi_disease_service.run_analysis(req.text)
 
 @router.post("/analysis/upload", response_model=UniversalDiseaseAnalysisResult)
 async def start_analysis_upload(file: UploadFile = File(...)):

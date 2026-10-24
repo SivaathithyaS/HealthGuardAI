@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { 
   FileText, Upload, Sparkles, AlertCircle, CheckCircle2, AlertTriangle, 
   TrendingDown, Zap, Heart, Activity, Stethoscope, Droplet, 
@@ -12,10 +12,11 @@ import ModelCardView from './components/ModelCardView';
 import AuditLogModal from './components/AuditLogModal';
 import OverrideModal from './components/OverrideModal';
 import ImagingView from './components/ImagingView';
+import HealthHistory from './components/HealthHistory';
 
 const API_BASE = 'http://localhost:8000';
 
-export default function App() {
+export default function App({ user = null, token = null, onSignOut = null }) {
   const [activeTab, setActiveTab] = useState('universal');
   const [serverOnline, setServerOnline] = useState(false);
   
@@ -367,6 +368,33 @@ export default function App() {
             />
             <span>{serverOnline ? 'System nominal' : 'Offline'}</span>
           </div>
+
+          {/* User greeting + sign-out */}
+          {user && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <button
+                className="status-pill"
+                style={{ cursor: 'pointer', gap: '8px' }}
+                onClick={() => setActiveTab('history')}
+                title="View your personal health history"
+              >
+                <User size={13} strokeWidth={1.5} />
+                <span style={{ maxWidth: '130px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {user.name || user.email}
+                </span>
+              </button>
+              {onSignOut && (
+                <button
+                  className="status-pill"
+                  style={{ cursor: 'pointer', color: 'var(--critical-accent, #ef4444)' }}
+                  onClick={onSignOut}
+                  title="Sign out"
+                >
+                  <span>Sign out</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </header>
 
@@ -419,6 +447,17 @@ export default function App() {
           <Activity size={15} strokeWidth={1.5} />
           <span>Imaging & Waveforms</span>
         </button>
+
+        {user && (
+          <button
+            className={`tab-button ${activeTab === 'history' ? 'active' : ''}`}
+            onClick={() => setActiveTab('history')}
+            style={{ marginLeft: 'auto' }}
+          >
+            <CalendarDays size={15} strokeWidth={1.5} />
+            <span>My Health History</span>
+          </button>
+        )}
       </nav>
 
       {/* ========================================================================= */}
@@ -1335,6 +1374,13 @@ export default function App() {
       {/* ========================================================================= */}
       {activeTab === 'imaging' && (
         <ImagingView apiBase={API_BASE} />
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 7: PERSONAL HEALTH HISTORY (per-user, isolated)                       */}
+      {/* ========================================================================= */}
+      {activeTab === 'history' && user && (
+        <HealthHistory user={user} token={token} />
       )}
 
       {/* Footer */}

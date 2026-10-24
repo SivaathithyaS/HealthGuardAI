@@ -116,7 +116,6 @@ export default function AuthPage({ onAuthenticated }) {
         });
       } else if (mode === 'signin') {
         const data = await request('/api/auth/login', {
-          name: form.name.trim(),
           email: form.email.trim(),
           password: form.password
         });
@@ -129,12 +128,7 @@ export default function AuthPage({ onAuthenticated }) {
           );
         }
 
-        sessionStorage.setItem(
-          'healthguard_access_token',
-          token
-        );
-
-        onAuthenticated();
+        onAuthenticated(token, data.user);
       } else if (mode === 'forgot') {
         const data = await request(
           '/api/auth/forgot-password',
@@ -159,9 +153,25 @@ export default function AuthPage({ onAuthenticated }) {
     }
   };
 
-  const handleDemoAccess = () => {
-    sessionStorage.setItem('healthguard_access_token', 'demo-clinician-session');
-    onAuthenticated();
+  const handleDemoAccess = async () => {
+    setBusy(true);
+    try {
+      const data = await request('/api/auth/login', {
+        email: 'clinician@healthguard.ai',
+        password: 'Password123!'
+      });
+      const token = data.access_token || data.token;
+      onAuthenticated(token, data.user);
+    } catch {
+      // Fallback: use ephemeral demo token
+      onAuthenticated('demo-clinician-session', {
+        name: 'Dr. Sarah Lin, MD',
+        email: 'clinician@healthguard.ai',
+        role: 'Clinician'
+      });
+    } finally {
+      setBusy(false);
+    }
   };
 
   const isRegister = mode === 'register';
@@ -246,8 +256,7 @@ export default function AuthPage({ onAuthenticated }) {
           <p className="auth-form-subtitle">{subtitle}</p>
 
           <form className="auth-form" onSubmit={handleSubmit}>
-            {(mode === 'signin' ||
-              (isRegister && !otpSent)) && (
+            {(isRegister && !otpSent) && (
               <label className="auth-field">
                 <span>Full name</span>
                 <div className="auth-input-wrap">

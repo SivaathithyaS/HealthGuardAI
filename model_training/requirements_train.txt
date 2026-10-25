@@ -1,0 +1,21 @@
+# GPU training dependencies for HealthGuard AI model training
+# Install with:  pip install -r requirements_train.txt
+
+torch>=2.2.0
+torchvision>=0.17.0
+torchaudio>=2.2.0
+
+# ECG / signal processing
+wfdb>=4.1.0          # reads PTB-XL .dat/.hea PhysioNet format
+scipy>=1.12.0        # signal resampling (resample_poly)
+numpy>=1.26.0,<2.0.0
+
+# MRI / image processing
+Pillow>=10.0.0
+scikit-learn>=1.5.0  # metrics: roc_auc_score, classification_report
+matplotlib>=3.8.0    # training curves, confusion matrix plots
+seaborn>=0.13.0      # nicer confusion matrix heatmap
+
+# Data utilities
+pandas>=2.2.0
+tqdm>=4.66.0         # progress bars

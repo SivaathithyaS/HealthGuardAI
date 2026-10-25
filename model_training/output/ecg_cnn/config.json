@@ -1,0 +1,37 @@
+{
+  "name": "ecg_cnn",
+  "modality": "ecg",
+  "model_version": "ecg-resnet1d-ptbxl-v1",
+  "stub": false,
+  "threshold": 0.6,
+  "num_classes": 5,
+  "input_shape": [
+    1,
+    500
+  ],
+  "weights_file": "weights.pt",
+  "weights_sha256": "d14463500150900fe2776c4eb9f70f6fdbf7556d2f27b92ed7b26026ab4cdfb7",
+  "labels": [
+    "Normal Sinus Rhythm",
+    "Myocardial Infarction",
+    "ST/T-Wave Change",
+    "Conduction Disturbance",
+    "Cardiac Hypertrophy"
+  ],
+  "description": "1D ResNet trained on PTB-XL v1.0.3 (PhysioNet). Classifies Lead-II 5-second strips (500 samples at 100 Hz) into 5 diagnostic superclasses: NORM, MI, STTC, CD, HYP.",
+  "training": {
+    "dataset": "PTB-XL v1.0.3",
+    "n_train": "~17,200 ECGs (folds 1-8)",
+    "n_val": "~2,180 ECGs (fold 9)",
+    "n_test": "~2,180 ECGs (fold 10)",
+    "val_accuracy": 0.6363636363636364,
+    "test_accuracy": 0.627831715210356,
+    "auc_per_class": {
+      "NORM": 0.8889323729268573,
+      "MI": 0.7798030480262825,
+      "STTC": 0.845271536325201,
+      "CD": 0.8060949769412936,
+      "HYP": 0.6721385302088314
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "name": "mri_cnn",
+  "modality": "mri",
+  "model_version": "mri-densenet121-kaggle-v1",
+  "stub": false,
+  "threshold": 0.6,
+  "num_classes": 4,
+  "input_shape": [
+    3,
+    224,
+    224
+  ],
+  "weights_file": "weights.pt",
+  "weights_sha256": "69768b6c01bb617196044b1fdc82781e6afac35456cc78979b3923ca7921b24d",
+  "labels": [
+    "Glioma / High-Grade Neoplasm",
+    "Meningioma",
+    "No Tumor Detected",
+    "Pituitary Adenoma"
+  ],
+  "description": "DenseNet-121 fine-tuned on the Kaggle Brain Tumor MRI Dataset (masoudnickparvar, 7,023 images). Classifies axial MRI slices into 4 categories: glioma, meningioma, no-tumor, and pituitary adenoma.",
+  "training": {
+    "dataset": "Kaggle Brain Tumor MRI Dataset (masoudnickparvar)",
+    "n_train": "~2,870 images (Training split)",
+    "n_test": "~394 images (Testing split)",
+    "val_accuracy": "see MODEL_CARD.md",
+    "test_accuracy": "see MODEL_CARD.md",
+    "note": "WARNING: 'notumor' class comes from a different image source. Check domain_bias_report.json for brightness statistics."
+  }
+}

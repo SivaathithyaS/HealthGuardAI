@@ -2,15 +2,20 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Activity, Brain, Upload, Sparkles, AlertTriangle, CheckCircle2, 
   AlertOctagon, ShieldAlert, RefreshCw, Layers, ShieldCheck, 
-  HelpCircle, Info, FileText, Check, ChevronRight, Zap, Database, ArrowRight
+  HelpCircle, Info, FileText, Check, ChevronRight, Zap, Database, ArrowRight, X
 } from 'lucide-react';
 
 import EcgWaveform from './EcgWaveform';
 import HeatmapOverlay from './HeatmapOverlay';
 
-export default function ImagingView({ apiBase = 'http://localhost:8000' }) {
+export default function ImagingView({ 
+  apiBase = 'http://localhost:8000',
+  token = null,
+  user = null,
+  onScanComplete = null
+}) {
   const [modality, setModality] = useState('ecg'); // 'ecg' | 'mri'
-  const [selectedSampleId, setSelectedSampleId] = useState('sample_ecg_stemi');
+  const [selectedSampleId, setSelectedSampleId] = useState(null);
   const [uploadedFile, setUploadedFile] = useState(null);
   const [uploadedPreviewUrl, setUploadedPreviewUrl] = useState(null);
   
@@ -96,19 +101,10 @@ export default function ImagingView({ apiBase = 'http://localhost:8000' }) {
       setUploadedPreviewUrl(null);
     }
     setError(null);
-    if (newModality === 'ecg') {
-      setSelectedSampleId('sample_ecg_stemi');
-    } else {
-      setSelectedSampleId('sample_mri_glioma');
-    }
-    // Auto-execute default sample for smooth clinician demo
-    executeSampleAnalysis(newModality, newModality === 'ecg' ? 'sample_ecg_stemi' : 'sample_mri_glioma');
+    setResult(null);
+    setSelectedSampleId(null);
+    setPipelineStage('IDLE');
   };
-
-  // Initial auto-run on first mount
-  useEffect(() => {
-    executeSampleAnalysis('ecg', 'sample_ecg_stemi');
-  }, []);
 
   const handleFileUpload = (e) => {
     const file = e.target.files?.[0];
@@ -128,8 +124,46 @@ export default function ImagingView({ apiBase = 'http://localhost:8000' }) {
       }
     }
 
-    // Trigger analysis with the uploaded file
-    executeUploadAnalysis(file);
+    // Keep file staged without running automatically, allowing user to see preview and use Run button
+  };
+
+  const saveImagingCheckup = async (data, sourceTitle) => {
+    const effectiveToken = token || sessionStorage.getItem('healthguard_access_token');
+    if (!effectiveToken || !data) return;
+
+    try {
+      const pred = data.primary_prediction || (data.predictions && data.predictions[0]) || {};
+      const condName = pred.label || (modality === 'ecg' ? 'ECG Rhythm Analysis' : 'Brain MRI Scan');
+      const prob = typeof pred.probability === 'number' ? pred.probability : 0.88;
+      const score = Math.round(prob * 100);
+      const modalityKey = modality === 'ecg' ? 'ECG_REPORT' : (modality === 'mri' ? 'BRAIN_MRI_REPORT' : 'CHEST_CT_REPORT');
+
+      await fetch(`${apiBase}/api/auth/save-checkup`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${effectiveToken}`
+        },
+        body: JSON.stringify({
+          modality: modalityKey,
+          title: condName,
+          summary: data.reason || `Imaging inference: ${condName} (${score}% confidence). Source: ${sourceTitle || 'Uploaded File'}`,
+          risk_score: score,
+          biomarkers: {},
+          findings: [
+            data.level1_observed || `Primary observed diagnostic feature for ${modality.toUpperCase()}`,
+            ...(data.features || [])
+          ],
+          recommendations: [
+            data.recommendation || 'Clinical correlation with patient history and imaging follow-up recommended.'
+          ]
+        })
+      });
+
+      if (onScanComplete) onScanComplete();
+    } catch (saveErr) {
+      console.warn("Failed to auto-save imaging checkup:", saveErr);
+    }
   };
 
   const executeUploadAnalysis = async (fileToUpload) => {
@@ -162,12 +196,14 @@ export default function ImagingView({ apiBase = 'http://localhost:8000' }) {
       const data = await res.json();
       setResult(data);
       setPipelineStage('COMPLETE');
+      await saveImagingCheckup(data, targetFile.name);
     } catch (err) {
       console.warn("Backend inference failed, activating client contract mock:", err);
       // Fallback mock strictly conforming to the contract
       const mock = generateMockResponse(modality, targetFile.name);
       setResult(mock);
       setPipelineStage('COMPLETE');
+      await saveImagingCheckup(mock, targetFile.name);
     } finally {
       setAnalysisLoading(false);
     }
@@ -204,11 +240,15 @@ export default function ImagingView({ apiBase = 'http://localhost:8000' }) {
       const data = await res.json();
       setResult(data);
       setPipelineStage('COMPLETE');
+      const activeSample = currentSamples.find(s => s.id === sId);
+      await saveImagingCheckup(data, activeSample?.title || sId);
     } catch (err) {
       console.warn("Backend sample query failed, utilizing mock fallback:", err);
       const mock = generateMockResponse(m, sId);
       setResult(mock);
       setPipelineStage('COMPLETE');
+      const activeSample = currentSamples.find(s => s.id === sId);
+      await saveImagingCheckup(mock, activeSample?.title || sId);
     } finally {
       setAnalysisLoading(false);
     }
@@ -481,8 +521,10 @@ export default function ImagingView({ apiBase = 'http://localhost:8000' }) {
               onClick={() => {
                 if (uploadedFile) {
                   executeUploadAnalysis(uploadedFile);
-                } else {
+                } else if (selectedSampleId) {
                   executeSampleAnalysis(modality, selectedSampleId);
+                } else {
+                  setError("Please select a diagnostic test case or upload a file.");
                 }
               }}
               disabled={analysisLoading}
@@ -501,6 +543,56 @@ export default function ImagingView({ apiBase = 'http://localhost:8000' }) {
             </button>
           </div>
         </div>
+
+        {/* Uploaded File Preview Chip */}
+        {uploadedFile && (
+          <div style={{
+            marginBottom: '14px',
+            padding: '10px 14px',
+            borderRadius: 'var(--radius-sm, 6px)',
+            background: 'var(--bg-subtle, rgba(255,255,255,0.04))',
+            border: '1px solid var(--brand-accent, #3b82f6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+              <FileText size={18} color="var(--brand-accent)" style={{ flexShrink: 0 }} />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: '0.84rem', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {uploadedFile.name}
+                </div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                  {(uploadedFile.size / 1024).toFixed(1)} KB • Staged for analysis. Click "Run Neural Inference" to proceed.
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setUploadedFile(null);
+                if (uploadedPreviewUrl) {
+                  URL.revokeObjectURL(uploadedPreviewUrl);
+                  setUploadedPreviewUrl(null);
+                }
+                if (fileInputRef.current) fileInputRef.current.value = '';
+              }}
+              title="Remove file"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-muted)',
+                cursor: 'pointer',
+                padding: '4px',
+                display: 'flex',
+                alignItems: 'center'
+              }}
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
 
         {/* Sample Chips Scroll Row */}
         <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '6px' }}>
@@ -614,6 +706,33 @@ export default function ImagingView({ apiBase = 'http://localhost:8000' }) {
           </div>
         )}
       </div>
+
+      {/* ========================================================================= */}
+      {/* EMPTY STATE — shown when no inference has been run yet                     */}
+      {/* ========================================================================= */}
+      {!result && pipelineStage === 'IDLE' && (
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '64px 24px',
+          gap: '16px',
+          opacity: 0.45,
+          userSelect: 'none',
+          pointerEvents: 'none',
+        }}>
+          <Activity size={48} strokeWidth={1} style={{ color: 'var(--text-muted)' }} />
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+              No report scanned yet
+            </div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', maxWidth: '360px', lineHeight: 1.6 }}>
+              Select a diagnostic test case or upload your own ECG / MRI file above, then click "Run Neural Inference" to start.
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* 3. DIAGNOSTIC RESULT CARD & EXPLAINABILITY VISUALIZERS                     */}

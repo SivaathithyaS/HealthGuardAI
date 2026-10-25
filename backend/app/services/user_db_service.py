@@ -82,6 +82,26 @@ class UserDBService:
             );
             """)
 
+            # 5. User Clinician Feedback & Audit Log Table (Isolated by user_id)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS feedback (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                case_id TEXT,
+                patient_name TEXT,
+                condition_name TEXT,
+                original_score REAL,
+                action TEXT,
+                override_text TEXT,
+                override_reason TEXT,
+                clinician_id TEXT,
+                timestamp TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_feedback_user ON feedback(user_id, created_at DESC);")
+
             conn.commit()
 
         # Seed default clinician account if not present
@@ -122,14 +142,8 @@ class UserDBService:
                 role="Patient"
             )
 
-        # Seed initial clinical checkup history for demo accounts if empty
-        clinician = self.get_user_by_email(clinician_email)
-        if clinician and len(self.get_user_timeline(clinician["id"])) == 0:
-            self._seed_sample_checkups(clinician["id"])
-
-        patient = self.get_user_by_email(demo_email)
-        if patient and len(self.get_user_timeline(patient["id"])) == 0:
-            self._seed_sample_checkups(patient["id"])
+        # Accounts start blank so users only see their own scanned/uploaded reports
+        pass
 
     def _seed_sample_checkups(self, user_id: str):
         """Seeds two longitudinal checkup records (baseline + follow-up) so history tab shows trajectory analysis."""
@@ -333,11 +347,14 @@ class UserDBService:
             cursor.execute("DELETE FROM sessions WHERE token = ?", (token,))
             conn.commit()
 
-    def delete_user_checkup(self, user_id: str, checkup_id: str) -> bool:
-        """Deletes a specific checkup strictly belonging to user_id."""
+    def delete_user_checkup(self, user_id: str, checkup_id: str, is_clinician: bool = False) -> bool:
+        """Deletes a specific checkup strictly belonging to user_id (or any checkup if clinician)."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("DELETE FROM checkups WHERE id = ? AND user_id = ?", (checkup_id, user_id))
+            if is_clinician:
+                cursor.execute("DELETE FROM checkups WHERE id = ?", (checkup_id,))
+            else:
+                cursor.execute("DELETE FROM checkups WHERE id = ? AND user_id = ?", (checkup_id, user_id))
             conn.commit()
             return cursor.rowcount > 0
 
@@ -541,5 +558,57 @@ class UserDBService:
             "deltas": deltas,
             "total_visits_recorded": len(timeline)
         }
+
+    # -------------------------------------------------------------------------
+    # CLINICIAN FEEDBACK & AUDIT LOG METHODS
+    # -------------------------------------------------------------------------
+    def save_user_feedback(self, user_id: str, entry: Dict[str, Any]) -> Dict[str, Any]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            feedback_id = entry.get("id") or f"fb-{secrets.token_hex(4)}"
+            timestamp = entry.get("timestamp") or datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC")
+            cursor.execute("""
+            INSERT OR REPLACE INTO feedback (
+                id, user_id, case_id, patient_name, condition_name,
+                original_score, action, override_text, override_reason,
+                clinician_id, timestamp
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                feedback_id,
+                user_id,
+                entry.get("case_id"),
+                entry.get("patient_name"),
+                entry.get("condition_name"),
+                entry.get("original_score", 0.0),
+                entry.get("action"),
+                entry.get("override_text"),
+                entry.get("override_reason"),
+                entry.get("clinician_id"),
+                timestamp
+            ))
+            conn.commit()
+            entry["id"] = feedback_id
+            entry["timestamp"] = timestamp
+            return entry
+
+    def get_user_feedback(self, user_id: str) -> List[Dict[str, Any]]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+            SELECT id, case_id, patient_name, condition_name, original_score,
+                   action, override_text, override_reason, clinician_id, timestamp
+            FROM feedback
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+            """, (user_id,))
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+
+    def clear_user_feedback(self, user_id: str) -> bool:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM feedback WHERE user_id = ?", (user_id,))
+            conn.commit()
+            return True
 
 user_db = UserDBService()

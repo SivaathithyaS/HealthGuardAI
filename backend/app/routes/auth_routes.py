@@ -12,6 +12,7 @@ Real authentication with:
 """
 
 import secrets
+from datetime import datetime, timezone
 from typing import Optional
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, status, Header
@@ -277,6 +278,21 @@ def save_checkup(
         findings=req.findings,
         recommendations=req.recommendations
     )
+    # Also log audit trail entry for the scanned checkup
+    user_db.save_user_feedback(
+        user_id=user["id"],
+        entry={
+            "case_id": f"CHK-{saved.get('id', 'REC')[:8]}",
+            "patient_name": user.get("name") or "Patient",
+            "condition_name": req.title,
+            "original_score": req.risk_score,
+            "action": "SCANNED",
+            "override_text": f"Modality: {req.modality}",
+            "override_reason": req.summary,
+            "clinician_id": f"{user.get('name', 'Attending Clinician')} ({user.get('role', 'Clinician')})",
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        }
+    )
     return {"status": "success", "checkup": saved}
 
 
@@ -287,7 +303,8 @@ def delete_checkup_endpoint(
 ):
     """Deletes a specific checkup belonging to the authenticated user."""
     user = _require_auth(authorization)
-    deleted = user_db.delete_user_checkup(user["id"], checkup_id)
+    is_clinician = user.get("role") == "Clinician"
+    deleted = user_db.delete_user_checkup(user["id"], checkup_id, is_clinician=is_clinician)
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

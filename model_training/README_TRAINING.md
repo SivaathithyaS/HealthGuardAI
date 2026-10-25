@@ -42,11 +42,23 @@
 # ══════════════════════════════════════════════════════════════
 #
 # ── ECG: PTB-XL v1.0.3 ──────────────────────────────────────
+# Note: PhysioNet website heavily throttles browser zip downloads (~100-300 KB/s).
+# Use one of the high-speed mirrors below instead:
+#
+# Option A (Recommended - Fast Browser Download via Kaggle):
+# URL: https://www.kaggle.com/datasets/khyeh0719/ptb-xl-dataset
+# Download at full speed from Kaggle (uses Google Cloud CDN).
+#
+# Option B (Fast Command-Line Download via AWS Open Data - No login needed):
+# aws s3 sync --no-sign-request s3://physionet-open/ptb-xl/1.0.3/records100/ model_training/ecg_ptbxl/data/records100/
+# aws s3 cp --no-sign-request s3://physionet-open/ptb-xl/1.0.3/ptbxl_database.csv model_training/ecg_ptbxl/data/ptbxl_database.csv
+# aws s3 cp --no-sign-request s3://physionet-open/ptb-xl/1.0.3/scp_statements.csv model_training/ecg_ptbxl/data/scp_statements.csv
+#
+# Option C (Original PhysioNet, slow):
 # URL: https://physionet.org/content/ptb-xl/1.0.3/
-# No login needed (open access).
-# Download "ptb-xl-a-large-publicly-available-electrocardiography-dataset-1.0.3.zip"
+#
 # Unzip and place the contents inside:  model_training/ecg_ptbxl/data/
-# Expected after unzip:
+# Expected layout:
 #   model_training/ecg_ptbxl/data/records100/00000/00001_lr.dat ...
 #   model_training/ecg_ptbxl/data/ptbxl_database.csv
 #   model_training/ecg_ptbxl/data/scp_statements.csv

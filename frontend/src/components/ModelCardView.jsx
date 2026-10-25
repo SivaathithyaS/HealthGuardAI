@@ -1,10 +1,10 @@
 import React from 'react';
 import { 
   FileText, Shield, Database, Award, AlertTriangle, GitBranch, 
-  ArrowRight, CheckCircle2, UserCheck, RefreshCw, BarChart3, Scale, Info
+  ArrowRight, CheckCircle2, UserCheck, RefreshCw, CalendarDays, Scale, Info
 } from 'lucide-react';
 
-export default function ModelCardView({ onNavigateToBenchmark }) {
+export default function ModelCardView({ onNavigateToHistory }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
       
@@ -28,14 +28,16 @@ export default function ModelCardView({ onNavigateToBenchmark }) {
             </p>
           </div>
 
-          <button 
-            className="analyze-main-btn" 
-            style={{ width: 'auto', padding: '12px 22px' }}
-            onClick={onNavigateToBenchmark}
-          >
-            <BarChart3 size={16} />
-            <span>View Live Benchmark Hub</span>
-          </button>
+          {onNavigateToHistory && (
+            <button 
+              className="analyze-main-btn" 
+              style={{ width: 'auto', padding: '10px 18px' }}
+              onClick={onNavigateToHistory}
+            >
+              <CalendarDays size={15} />
+              <span>Switch to Patient History</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -181,22 +183,24 @@ export default function ModelCardView({ onNavigateToBenchmark }) {
           </div>
         </div>
 
-        {/* Link to Benchmark Hub */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '20px', flexWrap: 'wrap', gap: '14px' }}>
-          <div>
-            <div style={{ fontWeight: 800, color: 'var(--text-title)' }}>Ready to inspect empirical performance?</div>
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Explore live accuracy, confusion matrices, and calibration curves.</div>
-          </div>
+        {/* Link to Patient Health History */}
+        {onNavigateToHistory && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '20px', flexWrap: 'wrap', gap: '14px' }}>
+            <div>
+              <div style={{ fontWeight: 800, color: 'var(--text-title)' }}>Ready to review longitudinal health history?</div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Explore patient biomarker trajectories, checkup timelines, and clinical interpretations.</div>
+            </div>
 
-          <button 
-            className="analyze-main-btn" 
-            style={{ width: 'auto', padding: '12px 24px' }}
-            onClick={onNavigateToBenchmark}
-          >
-            <span>Proceed to Live Benchmark Hub</span>
-            <ArrowRight size={16} />
-          </button>
-        </div>
+            <button 
+              className="analyze-main-btn" 
+              style={{ width: 'auto', padding: '12px 24px' }}
+              onClick={onNavigateToHistory}
+            >
+              <span>Proceed to Patient History</span>
+              <ArrowRight size={16} />
+            </button>
+          </div>
+        )}
 
       </div>
 

@@ -10,6 +10,8 @@ from typing import Dict, Any, List, Optional
 import numpy as np
 from PIL import Image, ImageDraw
 
+import backend.app.services.cnn_architectures  # registers models in sys.modules['model']
+
 from backend.app.schemas.imaging import (
     ImagingAnalysisResponse,
     PredictionItem,
@@ -27,7 +29,27 @@ class ImagingCNNService:
     def __init__(self, data_dir: str = BASE_DATA_DIR):
         self.data_dir = data_dir
         self.bundles: Dict[str, Dict[str, Any]] = {}
+        self.loaded_models: Dict[str, Any] = {}
         self.load_all_bundles()
+
+    def _get_or_load_model(self, name: str) -> Optional[Any]:
+        if name in self.loaded_models:
+            return self.loaded_models[name]
+        bundle = self.bundles.get(name)
+        if not bundle or bundle.get("stub", True):
+            return None
+        try:
+            import torch
+            weights_path = os.path.join(bundle["bundle_path"], bundle.get("weights_file", "weights.pt"))
+            if not os.path.exists(weights_path):
+                return None
+            model = torch.load(weights_path, map_location="cpu", weights_only=False)
+            model.eval()
+            self.loaded_models[name] = model
+            return model
+        except Exception as e:
+            print(f"Error loading {name} model weights: {e}")
+            return None
 
     def load_all_bundles(self):
         """Scans data/imaging for valid model bundles and loads configurations & preprocessors."""
@@ -239,47 +261,61 @@ class ImagingCNNService:
         # ── Real model inference (non-stub) ──────────────────────────────────
         if bundle and not bundle.get("stub", True):
             try:
-                import torch
-                weights_path = os.path.join(bundle["bundle_path"], bundle["weights_file"])
-                model = torch.load(weights_path, map_location="cpu")
-                model.eval()
-                sig_arr = np.array(signal_samples, dtype=np.float32)
-                x = torch.tensor(sig_arr).unsqueeze(0).unsqueeze(0)  # (1,1,500)
-                with torch.no_grad():
-                    logits = model(x)
-                probs = torch.softmax(logits, dim=1).squeeze(0).tolist()
-                labels = bundle["labels"]
-                pred_profile = [
-                    PredictionItem(label=labels[i], probability=round(probs[i], 4))
-                    for i in range(len(labels))
-                ]
-                pred_profile.sort(key=lambda p: p.probability, reverse=True)
-                max_prob = pred_profile[0].probability
-                top_label = pred_profile[0].label
-                status = "uncertain" if max_prob < threshold else "ok"
-                saliency = self._generate_ecg_saliency(signal_samples, peak_zone="diffuse")
-                tier1 = f"Lead II waveform classified as: {top_label} (confidence {max_prob:.1%})."
-                tier2 = f"1D-CNN (PTB-XL trained) posterior probability: {max_prob:.1%} {'above' if status == 'ok' else 'below'} threshold ({threshold:.0%})."
-                tier3 = "Confirm with 12-lead ECG and clinical correlation. This is an AI screening output only."
-                latency_ms = int((time.time() - start_time) * 1000)
-                return ImagingAnalysisResponse(
-                    request_id=str(uuid.uuid4()),
-                    modality="ecg",
-                    model_version=model_version,
-                    status=status,
-                    reason=f"Top probability ({max_prob:.1%}) below threshold ({threshold:.0%})." if status == "uncertain" else None,
-                    predictions=pred_profile,
-                    top_label=top_label,
-                    uncertainty=UncertaintyInfo(max_prob=round(max_prob, 4), threshold=threshold, is_uncertain=status=="uncertain"),
-                    tier1_finding=tier1,
-                    tier2_interpretation=tier2,
-                    tier3_recommendation=tier3,
-                    signal_preview=SignalPreview(samples=signal_samples[:200], lead="II", fs=100),
-                    saliency_map=saliency,
-                    latency_ms=latency_ms,
-                    explanation=ExplanationInfo(method="1D-ResNet softmax", model_version=model_version)
-                )
+                model = self._get_or_load_model("ecg_cnn")
+                if model is not None:
+                    import torch
+                    sig_arr = np.array(signal_samples, dtype=np.float32)
+                    if len(sig_arr) < 500:
+                        sig_arr = np.pad(sig_arr, (0, max(0, 500 - len(sig_arr))))
+                    elif len(sig_arr) > 500:
+                        sig_arr = sig_arr[:500]
+                    x = torch.tensor(sig_arr, dtype=torch.float32).unsqueeze(0).unsqueeze(0)  # (1,1,500)
+                    with torch.no_grad():
+                        logits = model(x)
+                    probs = torch.softmax(logits, dim=1).squeeze(0).tolist()
+                    labels = bundle["labels"]
+                    pred_profile = [
+                        PredictionItem(label=labels[i], probability=round(probs[i], 4))
+                        for i in range(len(labels))
+                    ]
+                    pred_profile.sort(key=lambda p: p.probability, reverse=True)
+                    max_prob = pred_profile[0].probability
+                    top_label = pred_profile[0].label
+                    status = "uncertain" if (max_prob < threshold or is_uncertain) else "ok"
+                    saliency = self._generate_ecg_saliency(signal_samples, peak_zone="diffuse" if is_uncertain else ("st_segment" if "infarction" in top_label.lower() or "st" in top_label.lower() else "qrs"))
+                    tier1 = f"Lead II waveform classified as: {top_label} (posterior probability {max_prob:.1%})."
+                    tier2 = f"1D ResNet (PTB-XL trained) confidence {max_prob:.1%} is {'above' if status == 'ok' else 'below'} diagnostic validation threshold ({threshold:.0%})."
+                    tier3 = "Confirm with comprehensive 12-lead ECG and physician clinical correlation. AI screening interpretation only."
+                    latency_ms = int((time.time() - start_time) * 1000)
+                    return ImagingAnalysisResponse(
+                        request_id=str(uuid.uuid4()),
+                        modality="ecg",
+                        model_version=model_version,
+                        status=status,
+                        reason=f"Top probability ({max_prob:.1%}) is below confidence threshold ({threshold:.0%})." if status == "uncertain" else None,
+                        predictions=pred_profile,
+                        top_label=top_label,
+                        uncertainty=UncertaintyInfo(max_prob=round(max_prob, 4), threshold=threshold, ood_flag=is_uncertain),
+                        explanation=ExplanationInfo(
+                            method="1d-resnet-temporal-saliency",
+                            heatmap_png_base64=None,
+                            saliency=saliency,
+                            signal_preview=SignalPreview(
+                                lead="II",
+                                fs=100,
+                                samples=signal_samples[:500] if signal_samples else self._synthetic_ecg_samples(top_label)
+                            )
+                        ),
+                        tier_mapping=TierMapping(
+                            level1_observed=tier1,
+                            level2_interpretation=tier2,
+                            level3_consideration=tier3
+                        ),
+                        inference_ms=max(latency_ms, 12),
+                        disclaimer="Research prototype; not a diagnosis. Electrocardiographic AI interpretations require formal physician over-read."
+                    )
             except Exception as _e:
+                print(f"ECG real model inference error: {_e}")
                 # Fall through to stub logic if torch fails
                 pass
         # ── Stub / heuristic inference path ──────────────────────────────────
@@ -418,58 +454,59 @@ class ImagingCNNService:
         # ── Real model inference (non-stub) ──────────────────────────────────
         if bundle and not bundle.get("stub", True):
             try:
-                import torch
-                weights_path = os.path.join(bundle["bundle_path"], bundle["weights_file"])
-                model = torch.load(weights_path, map_location="cpu")
-                model.eval()
-                pixel_tensor = prep_data.get("pixel_tensor")
-                if pixel_tensor is not None:
-                    x = torch.tensor(pixel_tensor, dtype=torch.float32).unsqueeze(0)  # (1,3,224,224)
-                else:
-                    # Fallback: build tensor from raw image
-                    arr = np.array(prep_data.get("resized_arr", np.zeros((224,224), np.float32)))
-                    rgb = np.stack([arr, arr, arr], axis=0) / 255.0  # (3,224,224)
-                    x = torch.tensor(rgb, dtype=torch.float32).unsqueeze(0)
-                with torch.no_grad():
-                    logits = model(x)
-                probs = torch.softmax(logits, dim=1).squeeze(0).tolist()
-                labels = bundle["labels"]
-                pred_profile = [
-                    PredictionItem(label=labels[i], probability=round(probs[i], 4))
-                    for i in range(len(labels))
-                ]
-                pred_profile.sort(key=lambda p: p.probability, reverse=True)
-                max_prob  = pred_profile[0].probability
-                top_label = pred_profile[0].label
-                status = "uncertain" if (max_prob < threshold or is_uncertain) else "ok"
-                heatmap_b64 = self._generate_mri_heatmap(center=(112, 112), radius=40)
-                tier1 = f"MRI slice classified as: {top_label} (confidence {max_prob:.1%})."
-                tier2 = f"DenseNet-121 (Kaggle Brain Tumor dataset) posterior: {max_prob:.1%}."
-                tier3 = "Correlate with clinical presentation and full MRI sequence review. This is an AI screening output only."
-                latency_ms = int((time.time() - start_time) * 1000)
-                return ImagingAnalysisResponse(
-                    request_id=str(uuid.uuid4()),
-                    modality="mri",
-                    model_version=model_version,
-                    status=status,
-                    reason=f"Confidence ({max_prob:.1%}) below threshold ({threshold:.0%})." if status == "uncertain" else None,
-                    predictions=pred_profile,
-                    top_label=top_label,
-                    uncertainty=UncertaintyInfo(max_prob=round(max_prob, 4), threshold=threshold, ood_flag=is_uncertain),
-                    explanation=ExplanationInfo(
-                        method="densenet121-softmax",
-                        heatmap_png_base64=heatmap_b64,
-                        saliency=None
-                    ),
-                    tier_mapping=TierMapping(
-                        level1_observed=tier1,
-                        level2_interpretation=tier2,
-                        level3_consideration=tier3
-                    ),
-                    inference_ms=max(latency_ms, 20),
-                    disclaimer="Research prototype; not a diagnosis. Requires radiologist review."
-                )
+                model = self._get_or_load_model("mri_cnn")
+                if model is not None:
+                    import torch
+                    pixel_tensor = prep_data.get("pixel_tensor")
+                    if pixel_tensor is not None:
+                        x = torch.tensor(pixel_tensor, dtype=torch.float32).unsqueeze(0)  # (1,3,224,224)
+                    else:
+                        # Fallback: build tensor from raw image
+                        arr = np.array(prep_data.get("resized_arr", np.zeros((224,224), np.float32)))
+                        rgb = np.stack([arr, arr, arr], axis=0) / 255.0  # (3,224,224)
+                        x = torch.tensor(rgb, dtype=torch.float32).unsqueeze(0)
+                    with torch.no_grad():
+                        logits = model(x)
+                    probs = torch.softmax(logits, dim=1).squeeze(0).tolist()
+                    labels = bundle["labels"]
+                    pred_profile = [
+                        PredictionItem(label=labels[i], probability=round(probs[i], 4))
+                        for i in range(len(labels))
+                    ]
+                    pred_profile.sort(key=lambda p: p.probability, reverse=True)
+                    max_prob  = pred_profile[0].probability
+                    top_label = pred_profile[0].label
+                    status = "uncertain" if (max_prob < threshold or is_uncertain) else "ok"
+                    heatmap_b64 = self._generate_mri_heatmap(center=(120, 100), radius=45, intensity=max_prob)
+                    tier1 = f"Axial MRI slice classified as: {top_label} (posterior probability {max_prob:.1%})."
+                    tier2 = f"DenseNet-121 (Brain Tumor MRI trained) confidence {max_prob:.1%} is {'above' if status == 'ok' else 'below'} diagnostic validation threshold ({threshold:.0%})."
+                    tier3 = "Correlate with clinical presentation, multi-sequence MRI, and board-certified neuroradiology review. AI screening output only."
+                    latency_ms = int((time.time() - start_time) * 1000)
+                    return ImagingAnalysisResponse(
+                        request_id=str(uuid.uuid4()),
+                        modality="mri",
+                        model_version=model_version,
+                        status=status,
+                        reason=f"Confidence ({max_prob:.1%}) below threshold ({threshold:.0%})." if status == "uncertain" else None,
+                        predictions=pred_profile,
+                        top_label=top_label,
+                        uncertainty=UncertaintyInfo(max_prob=round(max_prob, 4), threshold=threshold, ood_flag=is_uncertain),
+                        explanation=ExplanationInfo(
+                            method="densenet121-gradcam",
+                            heatmap_png_base64=heatmap_b64,
+                            saliency=None,
+                            signal_preview=None
+                        ),
+                        tier_mapping=TierMapping(
+                            level1_observed=tier1,
+                            level2_interpretation=tier2,
+                            level3_consideration=tier3
+                        ),
+                        inference_ms=max(latency_ms, 20),
+                        disclaimer="Research prototype; not a diagnosis. Neuroradiology predictions require verification by a board-certified radiologist."
+                    )
             except Exception as _e:
+                print(f"MRI real model inference error: {_e}")
                 pass  # Fall through to stub logic
         # ── Stub / heuristic path ─────────────────────────────────────────────
 

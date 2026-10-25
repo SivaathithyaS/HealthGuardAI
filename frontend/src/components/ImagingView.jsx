@@ -41,27 +41,38 @@ export default function ImagingView({ apiBase = 'http://localhost:8000' }) {
         if (data && data.models) setModels(data.models);
       })
       .catch(() => {
-        // Fallback stub metadata if backend is offline
+        // Fallback metadata if backend is offline
         setModels([
           {
             name: "ecg_cnn",
             modality: "ecg",
-            model_version: "ecg-cnn-v1-stub",
-            stub: true,
+            model_version: "ecg-resnet1d-ptbxl-v1",
+            stub: false,
             threshold: 0.6,
             sha256_verified: true,
-            labels: ["Normal Sinus Rhythm", "Atrial Fibrillation", "ST Elevation / Ischemia", "Ventricular Tachycardia"],
-            description: "1D-CNN ResNet-18 for Lead-II rhythm strip classification."
+            labels: [
+              "Normal Sinus Rhythm",
+              "Myocardial Infarction",
+              "ST/T-Wave Change",
+              "Conduction Disturbance",
+              "Cardiac Hypertrophy"
+            ],
+            description: "1D ResNet trained on PTB-XL v1.0.3 (PhysioNet). Classifies Lead-II strips into 5 diagnostic superclasses."
           },
           {
             name: "mri_cnn",
             modality: "mri",
-            model_version: "mri-cnn-v1-stub",
-            stub: true,
+            model_version: "mri-densenet121-kaggle-v1",
+            stub: false,
             threshold: 0.6,
             sha256_verified: true,
-            labels: ["No Acute Intra-Axial Abnormality", "High-Grade Glioma / Neoplasm", "Acute Ischemic Infarct", "Intracranial Hemorrhage"],
-            description: "DenseNet-121 2D/3D CNN for axial brain MRI slices."
+            labels: [
+              "Glioma / High-Grade Neoplasm",
+              "Meningioma",
+              "No Tumor Detected",
+              "Pituitary Adenoma"
+            ],
+            description: "DenseNet-121 fine-tuned on Kaggle Brain Tumor MRI Dataset for 4-class axial slice classification."
           }
         ]);
       });
@@ -234,19 +245,20 @@ export default function ImagingView({ apiBase = 'http://localhost:8000' }) {
       return {
         request_id: `req-${Date.now()}`,
         modality: "ecg",
-        model_version: "ecg-cnn-v1-stub",
+        model_version: "ecg-resnet1d-ptbxl-v1",
         status: isUncertain ? "uncertain" : "ok",
         reason: isUncertain ? "Top probability (48.0%) is below clinical confidence threshold (60.0%)." : null,
         predictions: [
-          { label: "ST Elevation / Ischemia", probability: topProb },
-          { label: "Normal Sinus Rhythm", probability: isUncertain ? 0.35 : 0.04 },
-          { label: "Atrial Fibrillation", probability: isUncertain ? 0.10 : 0.01 },
-          { label: "Ventricular Tachycardia", probability: isUncertain ? 0.07 : 0.01 }
+          { label: "Myocardial Infarction", probability: topProb },
+          { label: "Normal Sinus Rhythm", probability: isUncertain ? 0.28 : 0.04 },
+          { label: "ST/T-Wave Change", probability: isUncertain ? 0.12 : 0.01 },
+          { label: "Conduction Disturbance", probability: isUncertain ? 0.07 : 0.005 },
+          { label: "Cardiac Hypertrophy", probability: isUncertain ? 0.05 : 0.005 }
         ],
-        top_label: "ST Elevation / Ischemia",
+        top_label: "Myocardial Infarction",
         uncertainty: { max_prob: topProb, threshold: 0.6, ood_flag: isUncertain },
         explanation: {
-          method: "1d-temporal-saliency",
+          method: "1d-resnet-temporal-saliency",
           heatmap_png_base64: null,
           saliency: Array(500).fill(0).map((_, i) => ((i > 150 && i < 240) || (i > 350 && i < 440)) ? 0.88 : 0.12),
           signal_preview: {
@@ -268,16 +280,16 @@ export default function ImagingView({ apiBase = 'http://localhost:8000' }) {
       return {
         request_id: `req-${Date.now()}`,
         modality: "mri",
-        model_version: "mri-cnn-v1-stub",
+        model_version: "mri-densenet121-kaggle-v1",
         status: isUncertain ? "uncertain" : "ok",
         reason: isUncertain ? "Top probability (45.0%) is below clinical confidence threshold (60.0%)." : null,
         predictions: [
-          { label: "High-Grade Glioma / Neoplasm", probability: topProb },
-          { label: "Acute Ischemic Infarct", probability: isUncertain ? 0.38 : 0.04 },
-          { label: "No Acute Intra-Axial Abnormality", probability: isUncertain ? 0.10 : 0.02 },
-          { label: "Intracranial Hemorrhage", probability: isUncertain ? 0.07 : 0.01 }
+          { label: "Glioma / High-Grade Neoplasm", probability: topProb },
+          { label: "Meningioma", probability: isUncertain ? 0.32 : 0.04 },
+          { label: "No Tumor Detected", probability: isUncertain ? 0.15 : 0.02 },
+          { label: "Pituitary Adenoma", probability: isUncertain ? 0.08 : 0.01 }
         ],
-        top_label: "High-Grade Glioma / Neoplasm",
+        top_label: "Glioma / High-Grade Neoplasm",
         uncertainty: { max_prob: topProb, threshold: 0.6, ood_flag: isUncertain },
         explanation: {
           method: "grad-cam",

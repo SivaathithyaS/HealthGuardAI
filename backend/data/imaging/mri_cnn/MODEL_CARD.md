@@ -1,19 +1,44 @@
-# Model Card: HealthGuard MRI-CNN-v1 (Neuro-Oncology & Acute Lesion Classifier)
+# Model Card — Brain Tumor MRI DenseNet-121
 
 ## Model Details
-- **Architecture**: 2D/3D DenseNet-121 CNN architecture trained with Gradient-weighted Class Activation Mapping (Grad-CAM) at the final dense block.
-- **Input Modality**: Axial T1-weighted contrast-enhanced (T1-Gd) and T2-FLAIR brain MRI slices, standardized to 224x224 grayscale.
-- **Target Conditions**:
-  1. No Acute Intra-Axial Abnormality
-  2. High-Grade Glioma / Neoplasm (e.g. Glioblastoma Multiforme)
-  3. Acute Ischemic Infarct (Cytotoxic Edema)
-  4. Intracranial Hemorrhage (Parenchymal / Subarachnoid)
-- **Model Version**: `mri-cnn-v1-stub` (Clinical prototype stub)
+| Field | Value |
+|---|---|
+| Name | mri_cnn |
+| Architecture | DenseNet-121 (ImageNet pretrained, head replaced) |
+| Parameters | ~7M |
+| Input | (3, 224, 224) — grayscale MRI slice replicated to 3 channels |
+| Output | (4,) softmax probabilities |
+| Model version | mri-densenet121-kaggle-v1 |
 
-## Intended Clinical Use
-Designed for automated neuroradiology triage, lesion localization, and emergency department workflow prioritization when sudden neurologic deficits or seizures present.
+## Dataset
+| Field | Value |
+|---|---|
+| Dataset | Kaggle Brain Tumor MRI Dataset (masoudnickparvar) |
+| Images | ~7,023 total (Training + Testing splits) |
+| Classes | glioma, meningioma, notumor, pituitary |
+| Split | Pre-defined Training / Testing (no patient IDs) |
 
-## Limitations & Safeguards
-- Definitive diagnosis of high-grade glioma strictly requires stereotactic tissue biopsy and molecular biomarker profiling (IDH1/2 mutation, MGMT methylation, 1p/19q codeletion).
-- Severe patient motion artifacts, susceptibility from dental hardware, or prior craniotomy defects can degrade Grad-CAM localization.
-- Operating decision threshold is locked at `0.60`. Inconclusive probabilities (< 0.60) automatically assign an `uncertain` classification requiring human neuroradiologist over-read.
+## Performance
+| Metric | Value |
+|---|---|
+| Best Val (Test) Accuracy | N/A |
+| Final Test Accuracy | N/A |
+
+## Label Mapping
+| Index | Kaggle Class | Clinical Label |
+|---|---|---|
+| 0 | glioma | Glioma / High-Grade Neoplasm |
+| 1 | meningioma | Meningioma |
+| 2 | notumor | No Tumor Detected |
+| 3 | pituitary | Pituitary Adenoma |
+
+## Known Limitations & Bias
+- **Source-domain bias**: The `notumor` class images are from a different scanner
+  than the tumor classes. Run `domain_bias_report.json` to check brightness shift.
+- **No patient IDs**: Cannot guarantee patient-level split; test-set leakage is possible.
+- **Dropped classes**: Stroke/hemorrhage not included (no suitable open dataset).
+- **Single-slice only**: No volumetric or multi-sequence fusion.
+- **Not clinically validated**: Do not use for real clinical decisions.
+
+## SHA-256
+`69768b6c01bb617196044b1fdc82781e6afac35456cc78979b3923ca7921b24d`

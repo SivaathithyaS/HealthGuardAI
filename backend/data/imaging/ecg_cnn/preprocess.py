@@ -1,107 +1,127 @@
 """
-ECG Signal Preprocessor for HealthGuard AI Lead-II 1D-CNN.
-Extracts 1D voltage array, validates sample rate and impedance,
-normalizes amplitude to mV scale (-2.0 to +3.0 mV range).
+ECG Preprocessor for HealthGuard AI Lead-II 1D-CNN (real model).
+Accepts:
+  - JSON  {"samples": [...]}  or  [...]           — Lead-II voltage array
+  - CSV   with comma/newline-separated numbers    — Lead-II voltage array
+  - JSON  {"leads": {"II": [...]}}                — Multi-lead JSON, extracts II
+  - Raw binary int16 telemetry buffer             — interprets as Lead-II int16
+  - ECG strip image (PNG/JPEG)                    — pixel-row digitisation
+
+Output contract (matches model input):
+  signal:      list of 500 float32 values (5 sec at 100 Hz, z-scored per-record)
+  lead:        "II"
+  fs:          100
+  num_samples: 500
 """
 import io
 import json
 import numpy as np
 
+TARGET_SAMPLES = 500
+MIN_SAMPLES    = 10
+
+
 def preprocess(raw_bytes: bytes, filename: str = "") -> dict:
     if not raw_bytes or len(raw_bytes) == 0:
         raise ValueError("ECG file payload is empty (0 bytes received).")
-    
-    # Check for simulated corruption markers
-    if b"CORRUPT" in raw_bytes or b"INVALID_HEADER" in raw_bytes:
-        raise ValueError("ECG record failed checksum verification: corrupted signal frame or dropped telemetry packets.")
 
-    text_content = None
+    if b"CORRUPT" in raw_bytes or b"INVALID_HEADER" in raw_bytes:
+        raise ValueError("ECG record failed checksum: corrupted signal or invalid header.")
+
+    text = None
     try:
-        text_content = raw_bytes.decode('utf-8', errors='ignore').strip()
+        text = raw_bytes.decode("utf-8", errors="ignore").strip()
     except Exception:
         pass
 
     samples = []
 
-    # 1. Try parsing JSON payload
-    if text_content and (text_content.startswith('{') or text_content.startswith('[')):
+    # 1. JSON: {"leads": {"II": [...]}} — multi-lead format
+    if text and text.startswith("{"):
         try:
-            parsed = json.loads(text_content)
-            if isinstance(parsed, dict) and "samples" in parsed:
-                samples = [float(x) for x in parsed["samples"]]
-            elif isinstance(parsed, list):
-                samples = [float(x) for x in parsed]
+            parsed = json.loads(text)
+            if isinstance(parsed, dict):
+                if "leads" in parsed and isinstance(parsed["leads"], dict):
+                    lead_ii = parsed["leads"].get("II") or parsed["leads"].get("ii")
+                    if lead_ii:
+                        samples = [float(v) for v in lead_ii]
+                elif "samples" in parsed:
+                    samples = [float(v) for v in parsed["samples"]]
         except Exception:
             pass
 
-    # 2. Try parsing CSV or newline-delimited numbers
-    if not samples and text_content:
-        lines = [line.strip() for line in text_content.replace(',', '\n').split('\n') if line.strip()]
-        numeric_count = 0
-        candidate_samples = []
-        for line in lines[:2000]:
+    # 2. JSON: plain array
+    if not samples and text and text.startswith("["):
+        try:
+            parsed = json.loads(text)
+            if isinstance(parsed, list):
+                samples = [float(v) for v in parsed]
+        except Exception:
+            pass
+
+    # 3. CSV / newline-delimited numbers
+    if not samples and text:
+        parts = [p.strip() for p in text.replace(",", "\n").split("\n") if p.strip()]
+        candidates = []
+        for p in parts[:5000]:
             try:
-                val = float(line)
-                candidate_samples.append(val)
-                numeric_count += 1
+                candidates.append(float(p))
             except ValueError:
                 continue
-        if numeric_count >= 10:
-            samples = candidate_samples
+        if len(candidates) >= MIN_SAMPLES:
+            samples = candidates
 
-    # 3. If file is an image of an ECG strip or binary signal
+    # 4. ECG strip image — extract row-brightness profile as a proxy signal
     if not samples:
-        # Check if it is a valid image file
         try:
             from PIL import Image
-            img = Image.open(io.BytesIO(raw_bytes))
-            img.verify()
-            # Valid ECG strip image - simulate digitized 1D extraction
-            # Generate 500 normalized waveform samples
-            t = np.linspace(0, 5, 500)
-            baseline = 0.8 * np.sin(2 * np.pi * 1.2 * t)
-            samples = baseline.tolist()
+            img = Image.open(io.BytesIO(raw_bytes)).convert("L")
+            arr = np.array(img, dtype=np.float32)
+            # Invert and take column-max profile as proxy 1D signal
+            arr = 255.0 - arr
+            profile = arr.max(axis=0)
+            if len(profile) >= MIN_SAMPLES:
+                samples = profile.tolist()
         except Exception:
-            # If binary data and no recognizable header or text
-            if len(raw_bytes) < 32:
-                raise ValueError("ECG input unreadable: insufficient byte length (<32 bytes) or unknown recording format.")
-            # If it's a binary array of float32/int16
-            try:
-                arr = np.frombuffer(raw_bytes[:2000], dtype=np.int16)
-                if len(arr) >= 50:
-                    samples = (arr[:500].astype(np.float32) / 1000.0).tolist()
-                else:
-                    raise ValueError("Binary telemetry buffer contains fewer than 50 valid cardiac samples.")
-            except Exception as e:
-                raise ValueError(f"Unrecognized ECG format: unable to extract lead tracing ({str(e)}).")
+            pass
 
-    if not samples or len(samples) < 10:
-        raise ValueError("ECG extraction returned 0 valid voltage samples. Ensure file contains numerical signal data or valid ECG strip image.")
+    # 5. Raw int16 binary buffer
+    if not samples:
+        if len(raw_bytes) < 32:
+            raise ValueError("ECG input unreadable: too short (<32 bytes).")
+        try:
+            arr = np.frombuffer(raw_bytes[:10000], dtype=np.int16).astype(np.float32)
+            if len(arr) >= MIN_SAMPLES:
+                samples = (arr / 1000.0).tolist()
+        except Exception as e:
+            raise ValueError(f"Unrecognized ECG format: {e}")
 
-    # Check for flatline or infinite/NaN
-    samples_arr = np.array(samples, dtype=np.float32)
-    if np.any(np.isnan(samples_arr)) or np.any(np.isinf(samples_arr)):
-        raise ValueError("ECG voltage array contains NaN or Infinite values (lead disconnection artifact).")
+    if not samples or len(samples) < MIN_SAMPLES:
+        raise ValueError("ECG extraction returned 0 valid samples. Provide Lead-II signal data.")
 
-    std_dev = float(np.std(samples_arr))
-    if std_dev < 1e-4:
-        raise ValueError("ECG lead flatline detected (signal variance < 0.0001 mV). Check lead II placement.")
+    sig = np.array(samples, dtype=np.float32)
 
-    # Resample or truncate to standard 500 samples (5 sec at 100 Hz)
-    if len(samples) > 500:
-        indices = np.linspace(0, len(samples) - 1, 500, dtype=int)
-        samples_arr = samples_arr[indices]
-    elif len(samples) < 500:
-        # Interpolate to 500
-        x_old = np.linspace(0, 1, len(samples))
-        x_new = np.linspace(0, 1, 500)
-        samples_arr = np.interp(x_new, x_old, samples_arr)
+    if np.any(np.isnan(sig)) or np.any(np.isinf(sig)):
+        raise ValueError("ECG voltage array contains NaN/Inf (lead disconnection artifact).")
+    if sig.std() < 1e-4:
+        raise ValueError("ECG flatline detected (signal variance < 0.0001 mV).")
+
+    # Resample to TARGET_SAMPLES
+    if len(sig) != TARGET_SAMPLES:
+        x_old = np.linspace(0, 1, len(sig))
+        x_new = np.linspace(0, 1, TARGET_SAMPLES)
+        sig   = np.interp(x_new, x_old, sig).astype(np.float32)
+
+    # Z-score normalise (match training preprocessing)
+    std = sig.std()
+    if std > 1e-6:
+        sig = (sig - sig.mean()) / std
 
     return {
-        "lead": "II",
-        "fs": 100,
+        "lead":        "II",
+        "fs":          100,
         "duration_sec": 5.0,
-        "num_samples": 500,
-        "signal": samples_arr.tolist(),
-        "std_dev": std_dev
+        "num_samples":  TARGET_SAMPLES,
+        "signal":       sig.tolist(),
+        "std_dev":      float(std)
     }

@@ -2,12 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   FileText, Upload, Sparkles, AlertCircle, CheckCircle2, AlertTriangle, 
   TrendingDown, Zap, Heart, Activity, Stethoscope, Droplet, 
-  RefreshCw, ShieldAlert, Check, Calendar, ArrowRight, Layers, User, Award, Brain, Target, ShieldCheck, BarChart3, Database, FileCheck, GitBranch, Compass, TestTube, Users, Clock, Shield, AlertOctagon, Flame, ChevronDown, ChevronUp, Sun, Moon, CalendarDays, Info, Edit3, Flag, BookOpen, Eye, HelpCircle, LogOut
+  RefreshCw, ShieldAlert, Check, Calendar, ArrowRight, Layers, User, Award, Brain, Target, ShieldCheck, BarChart3, Database, FileCheck, GitBranch, Compass, TestTube, Users, Clock, Shield, AlertOctagon, Flame, ChevronDown, ChevronUp, Sun, Moon, CalendarDays, Info, Edit3, Flag, BookOpen, Eye, HelpCircle, LogOut,
+  PanelLeft, PanelLeftClose, PanelLeftOpen, ChevronLeft
 } from 'lucide-react';
 
 import RubricModal from './components/RubricModal';
 import SummaryView from './components/SummaryView';
-import BenchmarkHubView from './components/BenchmarkHubView';
 import ModelCardView from './components/ModelCardView';
 import AuditLogModal from './components/AuditLogModal';
 import OverrideModal from './components/OverrideModal';
@@ -23,6 +23,14 @@ export default function App({ user = null, token = null, onSignOut = null }) {
   
   // Dual View Mode State: 'clinician' (default full detail) or 'summary' (streamlined)
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('healthguard_view_mode') || 'clinician');
+  
+  // Collapsible Sidebar Mode: 'expanded' (full 270px) | 'collapsed' (compact 72px icon rail) | 'hidden' (0px)
+  const [sidebarMode, setSidebarMode] = useState(() => localStorage.getItem('healthguard_sidebar_mode') || 'expanded');
+
+  const handleSetSidebarMode = (mode) => {
+    setSidebarMode(mode);
+    localStorage.setItem('healthguard_sidebar_mode', mode);
+  };
   
   // Progressive Disclosure States
   const [showAllParams, setShowAllParams] = useState(false);
@@ -65,10 +73,6 @@ export default function App({ user = null, token = null, onSignOut = null }) {
   const [analysisError, setAnalysisError] = useState(null);
   const [sampleReports, setSampleReports] = useState([]);
   const fileInputRef = useRef(null);
-
-  // Evaluation Hub State
-  const [evalResults, setEvalResults] = useState(null);
-  const [evalLoading, setEvalLoading] = useState(false);
 
   // Individual Cardiology Ensemble State
   const [heartForm, setHeartForm] = useState({
@@ -289,18 +293,6 @@ export default function App({ user = null, token = null, onSignOut = null }) {
     }
   };
 
-  const runEvaluationHub = async () => {
-    setEvalLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/evaluation/metrics`);
-      const data = await res.json();
-      setEvalResults(data);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setEvalLoading(false);
-    }
-  };
 
   const handleHeartPredict = async (e) => {
     if (e) e.preventDefault();
@@ -341,15 +333,56 @@ export default function App({ user = null, token = null, onSignOut = null }) {
   return (
     <div className="dashboard-layout">
       {/* Sidebar Navigation */}
-      <aside className="dashboard-sidebar">
+      <aside className={`dashboard-sidebar mode-${sidebarMode}`}>
         <div className="sidebar-brand">
-          <div className="sidebar-brand-icon">
-            <Shield size={20} strokeWidth={1.5} />
-          </div>
-          <div>
-            <span className="sidebar-brand-title">HealthGuard AI</span>
-            <span className="sidebar-brand-badge">Clinical Decision Support</span>
-          </div>
+          {sidebarMode !== 'collapsed' ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
+                <div className="sidebar-brand-icon">
+                  <Shield size={20} strokeWidth={1.5} />
+                </div>
+                <div className="sidebar-brand-text">
+                  <span className="sidebar-brand-title">HealthGuard AI</span>
+                  <span className="sidebar-brand-badge">Clinical Decision Support</span>
+                </div>
+              </div>
+              <div className="sidebar-header-actions">
+                <button 
+                  type="button" 
+                  className="sidebar-action-btn"
+                  onClick={() => handleSetSidebarMode('collapsed')}
+                  title="Retract to compact icon rail"
+                  aria-label="Collapse sidebar"
+                >
+                  <PanelLeftClose size={15} />
+                </button>
+                <button 
+                  type="button" 
+                  className="sidebar-action-btn"
+                  onClick={() => handleSetSidebarMode('hidden')}
+                  title="Hide sidebar completely"
+                  aria-label="Hide sidebar"
+                >
+                  <ChevronLeft size={15} />
+                </button>
+              </div>
+            </>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+              <div className="sidebar-brand-icon" title="HealthGuard AI">
+                <Shield size={20} strokeWidth={1.5} />
+              </div>
+              <button 
+                type="button" 
+                className="sidebar-action-btn"
+                onClick={() => handleSetSidebarMode('expanded')}
+                title="Expand sidebar navigation"
+                aria-label="Expand sidebar"
+              >
+                <PanelLeftOpen size={16} />
+              </button>
+            </div>
+          )}
         </div>
 
         <nav className="sidebar-nav">
@@ -358,6 +391,7 @@ export default function App({ user = null, token = null, onSignOut = null }) {
             type="button"
             className={`sidebar-nav-item ${activeTab === 'universal' ? 'active' : ''}`}
             onClick={() => setActiveTab('universal')}
+            title="Universal Scanner"
           >
             <FileText size={16} strokeWidth={1.5} />
             <span>Universal Scanner</span>
@@ -367,6 +401,7 @@ export default function App({ user = null, token = null, onSignOut = null }) {
             type="button"
             className={`sidebar-nav-item ${activeTab === 'imaging' ? 'active' : ''}`}
             onClick={() => setActiveTab('imaging')}
+            title="Imaging & Waveforms"
           >
             <Activity size={16} strokeWidth={1.5} />
             <span>Imaging & Waveforms</span>
@@ -376,6 +411,7 @@ export default function App({ user = null, token = null, onSignOut = null }) {
             type="button"
             className={`sidebar-nav-item ${activeTab === 'presets' ? 'active' : ''}`}
             onClick={() => setActiveTab('presets')}
+            title="Pre-configured Reports"
           >
             <BookOpen size={16} strokeWidth={1.5} />
             <span>Pre-configured Reports</span>
@@ -386,6 +422,7 @@ export default function App({ user = null, token = null, onSignOut = null }) {
             type="button"
             className={`sidebar-nav-item ${activeTab === 'heart' ? 'active' : ''}`}
             onClick={() => { setActiveTab('heart'); if (!heartPred) handleHeartPredict(); }}
+            title="Cardiology Risk"
           >
             <Heart size={16} strokeWidth={1.5} />
             <span>Cardiology Risk</span>
@@ -395,42 +432,36 @@ export default function App({ user = null, token = null, onSignOut = null }) {
             type="button"
             className={`sidebar-nav-item ${activeTab === 'diabetes' ? 'active' : ''}`}
             onClick={() => { setActiveTab('diabetes'); if (!diabResult) handleDiabPredict(); }}
+            title="Diabetes Risk"
           >
             <Droplet size={16} strokeWidth={1.5} />
             <span>Diabetes Risk</span>
+          </button>
+
+          <div className="sidebar-nav-section-title">Clinical Records & Governance</div>
+          <button 
+            type="button"
+            className={`sidebar-nav-item ${activeTab === 'history' ? 'active' : ''}`}
+            onClick={() => setActiveTab('history')}
+            title="Patient Health History"
+          >
+            <CalendarDays size={16} strokeWidth={1.5} />
+            <span>Patient Health History</span>
           </button>
 
           <button 
             type="button"
             className={`sidebar-nav-item ${activeTab === 'model-card' ? 'active' : ''}`}
             onClick={() => setActiveTab('model-card')}
+            title="Clinical Model Card"
           >
             <FileCheck size={16} strokeWidth={1.5} />
             <span>Clinical Model Card</span>
           </button>
-
-          <div className="sidebar-nav-section-title">Validation & History</div>
-          <button 
-            type="button"
-            className={`sidebar-nav-item ${activeTab === 'evaluation' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('evaluation'); if (!evalResults) runEvaluationHub(); }}
-          >
-            <BarChart3 size={16} strokeWidth={1.5} />
-            <span>Live Validation Hub</span>
-          </button>
-
-          <button 
-            type="button"
-            className={`sidebar-nav-item ${activeTab === 'history' ? 'active' : ''}`}
-            onClick={() => setActiveTab('history')}
-          >
-            <CalendarDays size={16} strokeWidth={1.5} />
-            <span>My Health History</span>
-          </button>
         </nav>
 
         <div className="sidebar-footer">
-          <div className={`status-pill ${serverOnline ? 'nominal' : ''}`} style={{ width: '100%', justifyContent: 'center' }}>
+          <div className={`status-pill ${serverOnline ? 'nominal' : ''}`} style={{ width: '100%', justifyContent: 'center' }} title={serverOnline ? "System nominal" : "Offline"}>
             <span 
               className="status-dot" 
               style={{ background: serverOnline ? 'var(--good-accent)' : 'var(--critical-accent)' }}
@@ -444,27 +475,41 @@ export default function App({ user = null, token = null, onSignOut = null }) {
       <div className="dashboard-main">
         {/* Top Header Bar */}
         <header className="navbar">
-          <div>
-            <h1 className="navbar-page-title">
-              {activeTab === 'universal' && 'Universal Report Scanner & Prevention'}
-              {activeTab === 'imaging' && 'Clinical Imaging & Waveforms'}
-              {activeTab === 'presets' && 'Pre-configured Clinical Cases'}
-              {activeTab === 'heart' && 'Cardiology Risk Assessment'}
-              {activeTab === 'diabetes' && 'Diabetes Metabolic Risk Assessment'}
-              {activeTab === 'model-card' && 'Clinical Model Card Specification'}
-              {activeTab === 'evaluation' && 'Live Validation Benchmark Hub'}
-              {activeTab === 'history' && 'Personal Health History'}
-            </h1>
-            <p className="navbar-page-subtitle">
-              {activeTab === 'universal' && 'Multi-line entity extraction, 3-tier clinical hierarchy, and evidence-based prevention roadmaps.'}
-              {activeTab === 'imaging' && '1D-CNN ECG waveform analysis and DenseNet-121 Brain MRI GradCAM inference.'}
-              {activeTab === 'presets' && 'Standardized multi-specialty clinical benchmark scenarios with verified findings.'}
-              {activeTab === 'heart' && 'Cleveland Clinic 13-feature ensemble with TreeSHAP risk factor attribution.'}
-              {activeTab === 'diabetes' && 'Pima Indians metabolic biomarker ensemble with empirical confidence intervals.'}
-              {activeTab === 'model-card' && 'Specification of model architectures, training datasets, intended use, and limitations.'}
-              {activeTab === 'evaluation' && 'Blinded hospital test scenarios across oncology, stroke, cardiology, and metabolic disease.'}
-              {activeTab === 'history' && 'Per-user isolated timeline with visit-over-visit biomarker trajectory tracking.'}
-            </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+            <button
+              type="button"
+              className={`navbar-sidebar-toggle-btn ${sidebarMode === 'hidden' ? 'pulse-attention' : ''}`}
+              onClick={() => {
+                if (sidebarMode === 'hidden') handleSetSidebarMode('expanded');
+                else if (sidebarMode === 'expanded') handleSetSidebarMode('collapsed');
+                else handleSetSidebarMode('expanded');
+              }}
+              title={sidebarMode === 'hidden' ? "Show sidebar navigation" : (sidebarMode === 'collapsed' ? "Expand sidebar tabs" : "Retract sidebar tabs")}
+              aria-label="Toggle sidebar navigation"
+            >
+              {sidebarMode === 'hidden' ? <PanelLeft size={18} /> : (sidebarMode === 'collapsed' ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />)}
+            </button>
+
+            <div>
+              <h1 className="navbar-page-title">
+                {activeTab === 'universal' && 'Universal Report Scanner & Prevention'}
+                {activeTab === 'imaging' && 'Clinical Imaging & Waveforms'}
+                {activeTab === 'presets' && 'Pre-configured Clinical Cases'}
+                {activeTab === 'heart' && 'Cardiology Risk Assessment'}
+                {activeTab === 'diabetes' && 'Diabetes Metabolic Risk Assessment'}
+                {activeTab === 'model-card' && 'Clinical Model Card Specification'}
+                {activeTab === 'history' && 'Personal Health History'}
+              </h1>
+              <p className="navbar-page-subtitle">
+                {activeTab === 'universal' && 'Multi-line entity extraction, 3-tier clinical hierarchy, and evidence-based prevention roadmaps.'}
+                {activeTab === 'imaging' && '1D-CNN ECG waveform analysis and DenseNet-121 Brain MRI GradCAM inference.'}
+                {activeTab === 'presets' && 'Standardized multi-specialty clinical benchmark scenarios with verified findings.'}
+                {activeTab === 'heart' && 'Cleveland Clinic 13-feature ensemble with TreeSHAP risk factor attribution.'}
+                {activeTab === 'diabetes' && 'Pima Indians metabolic biomarker ensemble with empirical confidence intervals.'}
+                {activeTab === 'model-card' && 'Specification of model architectures, training datasets, intended use, and limitations.'}
+                {activeTab === 'history' && 'Per-user isolated timeline with visit-over-visit biomarker trajectory tracking.'}
+              </p>
+            </div>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
@@ -1468,25 +1513,69 @@ export default function App({ user = null, token = null, onSignOut = null }) {
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 4: LIVE BLINDED EVALUATION HUB                                       */}
+      {/* SHARED SUB-DIVISION BAR: CLINICAL RECORDS & GOVERNANCE                   */}
       {/* ========================================================================= */}
-      {activeTab === 'evaluation' && (
-        <BenchmarkHubView 
-          evalResults={evalResults} 
-          evalLoading={evalLoading} 
-          onRerunBenchmark={runEvaluationHub} 
-        />
+      {(activeTab === 'history' || activeTab === 'model-card') && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--border-default)',
+          borderRadius: 'var(--radius-lg)',
+          padding: '8px 14px',
+          marginBottom: '20px',
+          flexWrap: 'wrap',
+          gap: '12px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{
+              fontSize: '0.72rem',
+              fontWeight: 700,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              color: 'var(--accent-primary)',
+              padding: '3px 9px',
+              borderRadius: '999px',
+              background: 'rgba(37, 99, 235, 0.1)',
+              border: '1px solid rgba(37, 99, 235, 0.2)'
+            }}>
+              Sub-Division
+            </span>
+            <span style={{ fontSize: '0.86rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+              Clinical Records & Governance
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              type="button"
+              className={`view-mode-btn ${activeTab === 'history' ? 'active' : ''}`}
+              onClick={() => setActiveTab('history')}
+              style={{ padding: '6px 14px', fontSize: '0.82rem' }}
+            >
+              <CalendarDays size={14} strokeWidth={1.5} />
+              <span>Patient History</span>
+            </button>
+            <button
+              type="button"
+              className={`view-mode-btn ${activeTab === 'model-card' ? 'active' : ''}`}
+              onClick={() => setActiveTab('model-card')}
+              style={{ padding: '6px 14px', fontSize: '0.82rem' }}
+            >
+              <FileCheck size={14} strokeWidth={1.5} />
+              <span>Clinical Model Card</span>
+            </button>
+          </div>
+        </div>
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 5: CLINICAL MODEL CARD SPECIFICATION                                  */}
+      {/* CLINICAL MODEL CARD SPECIFICATION                                         */}
       {/* ========================================================================= */}
       {activeTab === 'model-card' && (
         <ModelCardView 
-          onNavigateToBenchmark={() => { 
-            setActiveTab('evaluation'); 
-            if (!evalResults) runEvaluationHub(); 
-          }} 
+          onNavigateToHistory={() => setActiveTab('history')} 
         />
       )}
 

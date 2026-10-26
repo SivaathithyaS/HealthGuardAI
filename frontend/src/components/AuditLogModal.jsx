@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Download, Trash2, CheckCircle2, AlertCircle, Edit3, Flag, Shield, User } from 'lucide-react';
+import { X, Download, Trash2, CheckCircle2, AlertCircle, Edit3, Flag, Shield, User, FileText } from 'lucide-react';
 
 export default function AuditLogModal({ isOpen, onClose, feedbackLog, onClearLog }) {
   if (!isOpen) return null;
@@ -21,6 +21,7 @@ export default function AuditLogModal({ isOpen, onClose, feedbackLog, onClearLog
     downloadAnchor.remove();
   };
 
+  const countScanned = (feedbackLog || []).filter(i => i.action === 'SCANNED').length;
   const countConfirmed = (feedbackLog || []).filter(i => i.action === 'CONFIRMED').length;
   const countOverridden = (feedbackLog || []).filter(i => i.action === 'OVERRIDDEN').length;
   const countFlagged = (feedbackLog || []).filter(i => i.action === 'FLAGGED').length;
@@ -89,7 +90,7 @@ export default function AuditLogModal({ isOpen, onClose, feedbackLog, onClearLog
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginTop: '6px' }}>
             <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
               <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>Filter:</span>
-              {['ALL', 'CONFIRMED', 'OVERRIDDEN', 'FLAGGED'].map(act => (
+              {['ALL', 'SCANNED', 'CONFIRMED', 'OVERRIDDEN', 'FLAGGED'].map(act => (
                 <button
                   key={act}
                   className={`tab-button ${filterAction === act ? 'active' : ''}`}
@@ -140,8 +141,14 @@ export default function AuditLogModal({ isOpen, onClose, feedbackLog, onClearLog
               <tbody>
                 {filteredLog.length === 0 ? (
                   <tr>
-                    <td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
-                      No clinician feedback logged yet. Use the action buttons (Confirm, Override, Flag) on any differential diagnosis card.
+                    <td colSpan={6} style={{ textAlign: 'center', padding: '36px 20px', color: 'var(--text-muted)' }}>
+                      <Shield size={32} style={{ opacity: 0.25, display: 'block', margin: '0 auto 8px' }} />
+                      <div style={{ fontWeight: 600, fontSize: '0.95rem', color: 'var(--text-primary)', marginBottom: '4px' }}>
+                        No report scanned yet
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                        Scanned documents, imaging reports, and clinician review actions will be logged here in the audit trail.
+                      </div>
                     </td>
                   </tr>
                 ) : (
@@ -155,6 +162,7 @@ export default function AuditLogModal({ isOpen, onClose, feedbackLog, onClearLog
                       </td>
                       <td>
                         <span className={`hitl-logged-badge ${item.action.toLowerCase()}`}>
+                          {item.action === 'SCANNED' && <FileText size={12} />}
                           {item.action === 'CONFIRMED' && <CheckCircle2 size={12} />}
                           {item.action === 'OVERRIDDEN' && <Edit3 size={12} />}
                           {item.action === 'FLAGGED' && <Flag size={12} />}

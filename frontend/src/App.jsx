@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   FileText, Upload, Sparkles, AlertCircle, CheckCircle2, AlertTriangle, 
   TrendingDown, Zap, Heart, Activity, Stethoscope, Droplet, 
   RefreshCw, ShieldAlert, Check, Calendar, ArrowRight, Layers, User, Award, Brain, Target, ShieldCheck, BarChart3, Database, FileCheck, GitBranch, Compass, TestTube, Users, Clock, Shield, AlertOctagon, Flame, ChevronDown, ChevronUp, Sun, Moon, CalendarDays, Info, Edit3, Flag, BookOpen, Eye, HelpCircle, LogOut,
-  PanelLeft, PanelLeftClose, PanelLeftOpen, ChevronLeft
+  PanelLeft, PanelLeftClose, PanelLeftOpen, ChevronLeft, X
 } from 'lucide-react';
 
 import RubricModal from './components/RubricModal';
@@ -55,10 +55,13 @@ export default function App({ user = null, token = null, onSignOut = null }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Human-in-the-Loop Feedback Log
+  // ── Per-user storage key helpers ──────────────────────────────────────────
+  const userKey = (key) => `healthguard_${user?.email || 'guest'}_${key}`;
+
+  // Human-in-the-Loop Feedback Log — scoped per user
   const [feedbackLog, setFeedbackLog] = useState(() => {
     try {
-      const stored = localStorage.getItem('healthguard_feedback_log');
+      const stored = localStorage.getItem(userKey('feedback_log'));
       return stored ? JSON.parse(stored) : [];
     } catch {
       return [];
@@ -68,10 +71,19 @@ export default function App({ user = null, token = null, onSignOut = null }) {
   // Universal Report Scanner State
   const [pipelineStage, setPipelineStage] = useState('IDLE');
   const [clinicalText, setClinicalText] = useState('');
-  const [selectedPresetId, setSelectedPresetId] = useState('sample-3-stroke');
-  const [analysisResult, setAnalysisResult] = useState(null);
+  const [selectedPresetId, setSelectedPresetId] = useState('');
+  // Restore last scan result for returning users; new users start blank
+  const [analysisResult, setAnalysisResult] = useState(() => {
+    try {
+      const stored = localStorage.getItem(userKey('last_result'));
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
   const [analysisError, setAnalysisError] = useState(null);
   const [sampleReports, setSampleReports] = useState([]);
+  const [selectedFile, setSelectedFile] = useState(null);
   const fileInputRef = useRef(null);
 
   // Individual Cardiology Ensemble State
@@ -90,42 +102,36 @@ export default function App({ user = null, token = null, onSignOut = null }) {
   const [diabResult, setDiabResult] = useState(null);
   const [diabLoading, setDiabLoading] = useState(false);
 
+  const fetchFeedbackHistory = useCallback(() => {
+    fetch(`${API_BASE}/api/feedback/history`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data && Array.isArray(data.history)) {
+          setFeedbackLog(data.history);
+          localStorage.setItem(userKey('feedback_log'), JSON.stringify(data.history));
+        }
+      })
+      .catch(() => {});
+  }, [token, user?.email]);
+
   useEffect(() => {
+    // Server health check only — no auto-sample fetch or auto-analysis
     fetch(`${API_BASE}/health`)
       .then(res => res.json())
       .then(() => setServerOnline(true))
       .catch(() => setServerOnline(false));
 
+    // Load sample list for the Presets tab (but do NOT auto-run anything)
     fetch(`${API_BASE}/api/documents/samples`)
       .then(res => res.json())
-      .then(data => {
-        if (data.samples && data.samples.length > 0) {
-          setSampleReports(data.samples);
-          setClinicalText(data.samples[0].text);
-          setSelectedPresetId(data.samples[0].id);
-          executeUniversalAnalysis(data.samples[0].text, false);
-        }
-      })
+      .then(data => { if (data.samples) setSampleReports(data.samples); })
       .catch(() => {});
 
-    // Sync feedback history from backend
-    fetch(`${API_BASE}/api/feedback/history`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.history && data.history.length > 0) {
-          setFeedbackLog(prev => {
-            const ids = new Set(prev.map(p => p.id));
-            const merged = [...prev];
-            data.history.forEach(item => {
-              if (!ids.has(item.id)) merged.push(item);
-            });
-            localStorage.setItem('healthguard_feedback_log', JSON.stringify(merged));
-            return merged;
-          });
-        }
-      })
-      .catch(() => {});
-  }, []);
+    // Sync feedback history from backend for authenticated user
+    fetchFeedbackHistory();
+  }, [fetchFeedbackHistory]);
 
   const handleViewModeChange = (mode) => {
     setViewMode(mode);
@@ -148,12 +154,15 @@ export default function App({ user = null, token = null, onSignOut = null }) {
 
     const updated = [entry, ...feedbackLog];
     setFeedbackLog(updated);
-    localStorage.setItem('healthguard_feedback_log', JSON.stringify(updated));
+    localStorage.setItem(userKey('feedback_log'), JSON.stringify(updated));
 
     try {
       await fetch(`${API_BASE}/api/feedback/log`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
         body: JSON.stringify(entry)
       });
     } catch (err) {
@@ -195,12 +204,15 @@ export default function App({ user = null, token = null, onSignOut = null }) {
 
     const updated = [entry, ...feedbackLog];
     setFeedbackLog(updated);
-    localStorage.setItem('healthguard_feedback_log', JSON.stringify(updated));
+    localStorage.setItem(userKey('feedback_log'), JSON.stringify(updated));
 
     try {
       await fetch(`${API_BASE}/api/feedback/log`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
         body: JSON.stringify(entry)
       });
     } catch (err) {
@@ -210,10 +222,31 @@ export default function App({ user = null, token = null, onSignOut = null }) {
 
   const handleClearAuditLog = async () => {
     setFeedbackLog([]);
-    localStorage.removeItem('healthguard_feedback_log');
+    localStorage.removeItem(userKey('feedback_log'));
     try {
-      await fetch(`${API_BASE}/api/feedback/clear`, { method: 'DELETE' });
+      await fetch(`${API_BASE}/api/feedback/clear`, { 
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
     } catch {}
+  };
+
+  // Persist result per-user whenever it changes
+  useEffect(() => {
+    if (analysisResult) {
+      localStorage.setItem(userKey('last_result'), JSON.stringify(analysisResult));
+    }
+  }, [analysisResult]);
+
+  // Clear current session's scan result (not stored history)
+  const handleClearScanResult = () => {
+    setAnalysisResult(null);
+    setClinicalText('');
+    setSelectedFile(null);
+    setPipelineStage('IDLE');
+    setAnalysisError(null);
+    localStorage.removeItem(userKey('last_result'));
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const executeUniversalAnalysis = async (textToScan = clinicalText, saveToHistory = false) => {
@@ -248,15 +281,36 @@ export default function App({ user = null, token = null, onSignOut = null }) {
       }
       const data = await res.json();
       setAnalysisResult(data);
+      localStorage.setItem(userKey('last_result'), JSON.stringify(data));
       setPipelineStage('COMPLETE');
+      // Refresh audit log so scanned document shows immediately in the audit trail
+      fetchFeedbackHistory();
     } catch (err) {
       setAnalysisError(err.message);
       setPipelineStage('IDLE');
     }
   };
 
-  const handleFileUpload = async (e) => {
+  const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
+    if (!file) return;
+
+    setSelectedFile(file);
+    setAnalysisError(null);
+    setSelectedPresetId('');
+
+    // If text file, preview into clinical text
+    if (file.type.includes('text') || file.name.endsWith('.txt')) {
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        setClinicalText(evt.target.result || '');
+      };
+      reader.readAsText(file);
+    }
+  };
+
+  const executeFileUploadAnalysis = async (fileToUpload) => {
+    const file = fileToUpload || selectedFile;
     if (!file) return;
 
     setAnalysisError(null);
@@ -286,10 +340,24 @@ export default function App({ user = null, token = null, onSignOut = null }) {
       }
       const data = await res.json();
       setAnalysisResult(data);
+      localStorage.setItem(userKey('last_result'), JSON.stringify(data));
       setPipelineStage('COMPLETE');
+
+      // Refresh feedback history immediately to increment audit log
+      fetchFeedbackHistory();
     } catch (err) {
       setAnalysisError(err.message);
       setPipelineStage('IDLE');
+    }
+  };
+
+  const handleRunAnalysis = async () => {
+    if (selectedFile) {
+      await executeFileUploadAnalysis(selectedFile);
+    } else if (clinicalText && clinicalText.trim().length >= 10) {
+      await executeUniversalAnalysis(clinicalText, true);
+    } else {
+      setAnalysisError('Please select a report file to upload or enter clinical notes/findings.');
     }
   };
 
@@ -460,15 +528,7 @@ export default function App({ user = null, token = null, onSignOut = null }) {
           </button>
         </nav>
 
-        <div className="sidebar-footer">
-          <div className={`status-pill ${serverOnline ? 'nominal' : ''}`} style={{ width: '100%', justifyContent: 'center' }} title={serverOnline ? "System nominal" : "Offline"}>
-            <span 
-              className="status-dot" 
-              style={{ background: serverOnline ? 'var(--good-accent)' : 'var(--critical-accent)' }}
-            />
-            <span>{serverOnline ? 'System nominal' : 'Offline'}</span>
-          </div>
-        </div>
+
       </aside>
 
       {/* Main Content Area */}
@@ -615,7 +675,7 @@ export default function App({ user = null, token = null, onSignOut = null }) {
             {/* INTAKE CARD: CLEAN WORKSPACE WITHOUT OVERCROWDED PRESET CHIPS */}
             <div className="intake-card">
               <div className="intake-controls-row">
-                {/* Upload Button */}
+                {/* Upload Drop Zone */}
                 <div 
                   className="upload-mini-btn"
                   onClick={() => fileInputRef.current?.click()}
@@ -631,52 +691,15 @@ export default function App({ user = null, token = null, onSignOut = null }) {
                     type="file" 
                     accept=".pdf,.png,.jpg,.jpeg,.txt" 
                     style={{ display: 'none' }}
-                    onChange={handleFileUpload}
+                    onChange={handleFileSelect}
                   />
-                </div>
-
-                {/* Clinical Notes / Report Text Preview Area */}
-                <div className="intake-text-input-wrap">
-                  <textarea
-                    className="intake-textarea"
-                    rows={2}
-                    value={clinicalText}
-                    onChange={(e) => setClinicalText(e.target.value)}
-                    placeholder="Paste clinical report notes, lab biomarkers, or imaging findings here..."
-                  />
-                  <div className="intake-text-footer">
-                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                      {clinicalText.length > 0 ? `${clinicalText.split(/\s+/).filter(Boolean).length} words loaded` : 'No report loaded yet'}
-                    </span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      {clinicalText && (
-                        <button
-                          type="button"
-                          onClick={() => setClinicalText('')}
-                          className="intake-clear-btn"
-                          title="Clear report text"
-                        >
-                          Clear
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab('presets')}
-                        className="intake-preset-link"
-                        title="Browse Pre-configured Clinical Cases"
-                      >
-                        <BookOpen size={12} />
-                        <span>Browse Pre-configured Cases →</span>
-                      </button>
-                    </div>
-                  </div>
                 </div>
 
                 {/* Action Button */}
                 <button 
                   type="button"
                   className="analyze-main-btn"
-                  onClick={() => executeUniversalAnalysis(clinicalText, true)}
+                  onClick={handleRunAnalysis}
                   disabled={['CLASSIFYING', 'EXTRACTING', 'TRAVERSING_NODES'].includes(pipelineStage)}
                 >
                   {['CLASSIFYING', 'EXTRACTING', 'TRAVERSING_NODES'].includes(pipelineStage) ? (
@@ -693,6 +716,52 @@ export default function App({ user = null, token = null, onSignOut = null }) {
                 </button>
               </div>
 
+              {/* Uploaded File Preview Below Upload Section */}
+              {selectedFile && (
+                <div style={{
+                  marginTop: '12px',
+                  padding: '10px 14px',
+                  borderRadius: 'var(--radius-sm, 8px)',
+                  background: 'var(--bg-surface, #15221e)',
+                  border: '1px solid var(--border-default, #2a3832)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '12px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                    <FileText size={18} color="var(--brand-accent, #3b82f6)" style={{ flexShrink: 0 }} />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: '0.84rem', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {selectedFile.name}
+                      </div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        {(selectedFile.size / 1024).toFixed(1)} KB • Staged for scanning. Click "Run Analysis" to proceed.
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedFile(null);
+                      if (fileInputRef.current) fileInputRef.current.value = '';
+                    }}
+                    title="Remove file"
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--text-muted)',
+                      cursor: 'pointer',
+                      padding: '4px',
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              )}
+
               {analysisError && (
                 <div style={{ marginTop: '10px', padding: '10px 14px', background: 'var(--critical-bg)', border: '1px solid var(--critical-border)', borderRadius: '8px', color: 'var(--critical-text)', fontSize: '0.82rem' }}>
                   <AlertCircle size={15} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
@@ -702,10 +771,57 @@ export default function App({ user = null, token = null, onSignOut = null }) {
             </div>
 
           {/* ========================================================================= */}
+          {/* EMPTY STATE — shown when no scan has been run yet                         */}
+          {/* ========================================================================= */}
+          {!analysisResult && pipelineStage === 'IDLE' && (
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '64px 24px',
+              gap: '16px',
+              opacity: 0.45,
+              userSelect: 'none',
+              pointerEvents: 'none',
+            }}>
+              <FileText size={48} strokeWidth={1} style={{ color: 'var(--text-muted)' }} />
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                  No report scanned yet
+                </div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', maxWidth: '320px', lineHeight: 1.6 }}>
+                  Upload a PDF, image, or text report above to run the clinical analysis pipeline. Your results will appear here.
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
           {/* FULL-WIDTH OUTPUT DASHBOARD (SPANS 100% OF SCREEN)                       */}
           {/* ========================================================================= */}
           {analysisResult && (
-            viewMode === 'summary' ? (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '4px' }}>
+                <button
+                  type="button"
+                  onClick={handleClearScanResult}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '6px',
+                    background: 'transparent', border: '1px solid var(--border-default)',
+                    borderRadius: 'var(--radius-md)', padding: '5px 12px',
+                    fontSize: '0.75rem', color: 'var(--text-muted)', cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--critical-accent)'; e.currentTarget.style.color = 'var(--critical-accent)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-default)'; e.currentTarget.style.color = 'var(--text-muted)'; }}
+                  title="Clear current scan and start fresh"
+                >
+                  <RefreshCw size={12} />
+                  New Scan
+                </button>
+              </div>
+            {viewMode === 'summary' ? (
               <SummaryView 
                 analysisResult={analysisResult}
                 onSwitchToClinicianView={() => handleViewModeChange('clinician')}
@@ -1217,8 +1333,9 @@ export default function App({ user = null, token = null, onSignOut = null }) {
               </div>
 
             </div>
-          )
-        )}
+            )}
+            </>
+          )}
         </div>
       )}
 
@@ -1512,63 +1629,7 @@ export default function App({ user = null, token = null, onSignOut = null }) {
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* SHARED SUB-DIVISION BAR: CLINICAL RECORDS & GOVERNANCE                   */}
-      {/* ========================================================================= */}
-      {(activeTab === 'history' || activeTab === 'model-card') && (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          background: 'var(--bg-surface)',
-          border: '1px solid var(--border-default)',
-          borderRadius: 'var(--radius-lg)',
-          padding: '8px 14px',
-          marginBottom: '20px',
-          flexWrap: 'wrap',
-          gap: '12px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{
-              fontSize: '0.72rem',
-              fontWeight: 700,
-              letterSpacing: '0.06em',
-              textTransform: 'uppercase',
-              color: 'var(--accent-primary)',
-              padding: '3px 9px',
-              borderRadius: '999px',
-              background: 'rgba(37, 99, 235, 0.1)',
-              border: '1px solid rgba(37, 99, 235, 0.2)'
-            }}>
-              Sub-Division
-            </span>
-            <span style={{ fontSize: '0.86rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-              Clinical Records & Governance
-            </span>
-          </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button
-              type="button"
-              className={`view-mode-btn ${activeTab === 'history' ? 'active' : ''}`}
-              onClick={() => setActiveTab('history')}
-              style={{ padding: '6px 14px', fontSize: '0.82rem' }}
-            >
-              <CalendarDays size={14} strokeWidth={1.5} />
-              <span>Patient History</span>
-            </button>
-            <button
-              type="button"
-              className={`view-mode-btn ${activeTab === 'model-card' ? 'active' : ''}`}
-              onClick={() => setActiveTab('model-card')}
-              style={{ padding: '6px 14px', fontSize: '0.82rem' }}
-            >
-              <FileCheck size={14} strokeWidth={1.5} />
-              <span>Clinical Model Card</span>
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* ========================================================================= */}
       {/* CLINICAL MODEL CARD SPECIFICATION                                         */}
@@ -1583,7 +1644,12 @@ export default function App({ user = null, token = null, onSignOut = null }) {
       {/* TAB 6: CLINICAL IMAGING & WAVEFORMS (1D-CNN & DENSENET-121)               */}
       {/* ========================================================================= */}
       {activeTab === 'imaging' && (
-        <ImagingView apiBase={API_BASE} />
+        <ImagingView 
+          apiBase={API_BASE} 
+          token={token}
+          user={user}
+          onScanComplete={fetchFeedbackHistory}
+        />
       )}
 
       {/* ========================================================================= */}
@@ -1639,10 +1705,7 @@ export default function App({ user = null, token = null, onSignOut = null }) {
         isOpen={auditLogModalOpen} 
         onClose={() => setAuditLogModalOpen(false)} 
         feedbackLog={feedbackLog}
-        onClearLog={() => {
-          setFeedbackLog([]);
-          localStorage.removeItem('healthguard_feedback_log');
-        }}
+        onClearLog={handleClearAuditLog}
       />
 
       <OverrideModal 

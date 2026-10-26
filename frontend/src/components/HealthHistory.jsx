@@ -4,7 +4,7 @@ import {
   Activity, Calendar, ChevronDown, ChevronUp, Clock,
   HeartPulse, RefreshCw, ShieldCheck, TrendingDown, TrendingUp,
   AlertTriangle, CheckCircle2, BarChart3, Brain, Droplet, Eye,
-  Stethoscope, Info, Minus
+  Stethoscope, Info, Minus, Trash2
 } from 'lucide-react';
 
 const API_BASE = 'http://localhost:8000';
@@ -96,10 +96,8 @@ function CheckupCard({ checkup, onDelete }) {
 
   const handleDelete = (e) => {
     e.stopPropagation();
-    if (window.confirm(`Delete checkup record "${checkup.title}"?`)) {
-      setDeleting(true);
-      onDelete(checkup.id);
-    }
+    setDeleting(true);
+    onDelete(checkup.id);
   };
 
   return (
@@ -112,13 +110,13 @@ function CheckupCard({ checkup, onDelete }) {
       opacity: deleting ? 0.4 : 1
     }}>
       {/* Header row */}
-      <button
+      <div
         onClick={() => setExpanded(e => !e)}
         style={{
           display: 'flex', alignItems: 'center', gap: '14px',
           width: '100%', padding: '14px 18px',
-          background: 'transparent', border: 'none', cursor: 'pointer',
-          textAlign: 'left'
+          background: 'transparent', cursor: 'pointer',
+          textAlign: 'left', userSelect: 'none'
         }}
       >
         {/* Modality icon */}
@@ -159,23 +157,44 @@ function CheckupCard({ checkup, onDelete }) {
 
         {/* Delete button */}
         {onDelete && (
-          <div
+          <button
+            type="button"
             onClick={handleDelete}
             title="Delete checkup record"
+            aria-label="Delete checkup record"
             style={{
-              padding: '6px', borderRadius: '6px', color: 'var(--text-muted)',
-              cursor: 'pointer', display: 'flex', alignItems: 'center'
+              padding: '6px 8px',
+              borderRadius: '6px',
+              color: 'var(--text-muted, #8B948E)',
+              background: 'transparent',
+              border: '1px solid transparent',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.15s ease',
+              marginLeft: '4px'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = '#ef4444';
+              e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+              e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.25)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = 'var(--text-muted, #8B948E)';
+              e.currentTarget.style.background = 'transparent';
+              e.currentTarget.style.borderColor = 'transparent';
             }}
           >
-            <span style={{ fontSize: '12px' }}>×</span>
-          </div>
+            <Trash2 size={15} />
+          </button>
         )}
 
         {/* Expand toggle */}
-        <div style={{ color: 'var(--text-muted)', flexShrink: 0, marginLeft: '4px' }}>
+        <div style={{ color: 'var(--text-muted)', flexShrink: 0, marginLeft: '2px' }}>
           {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </div>
-      </button>
+      </div>
 
       {/* Expanded detail */}
       {expanded && (
@@ -317,28 +336,55 @@ export default function HealthHistory({ user, token, onNavigateToScanner }) {
   useEffect(() => { fetchHistory(); }, [fetchHistory]);
 
   const handleDeleteCheckup = async (id) => {
+    // Optimistic UI removal
+    setData(prev => {
+      if (!prev) return prev;
+      const updated = (prev.checkups || []).filter(c => c.id !== id);
+      return {
+        ...prev,
+        checkups: updated,
+        total: updated.length
+      };
+    });
+
     try {
-      await fetch(`${API_BASE}/api/auth/history/${id}`, {
+      const res = await fetch(`${API_BASE}/api/auth/history/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${effectiveToken}` }
       });
-      fetchHistory();
+      if (!res.ok) {
+        console.error("Failed to delete checkup on server:", res.status);
+        fetchHistory();
+      } else {
+        fetchHistory();
+      }
     } catch (err) {
       console.error("Failed to delete checkup", err);
+      fetchHistory();
     }
   };
 
   const handleClearHistory = async () => {
-    if (window.confirm("Are you sure you want to clear your entire checkup history?")) {
-      try {
-        await fetch(`${API_BASE}/api/auth/history`, {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${effectiveToken}` }
-        });
+    // Optimistic UI clear
+    setData(prev => ({
+      ...prev,
+      checkups: [],
+      longitudinal: null,
+      total: 0
+    }));
+
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/history`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${effectiveToken}` }
+      });
+      if (!res.ok) {
+        console.error("Failed to clear history on server:", res.status);
         fetchHistory();
-      } catch (err) {
-        console.error("Failed to clear history", err);
       }
+    } catch (err) {
+      console.error("Failed to clear history", err);
+      fetchHistory();
     }
   };
 
@@ -426,10 +472,9 @@ export default function HealthHistory({ user, token, onNavigateToScanner }) {
           textAlign: 'center', padding: '60px 20px',
           color: 'var(--text-muted)', fontSize: '14px'
         }}>
-          <HeartPulse size={40} style={{ opacity: 0.25, marginBottom: '16px' }} />
-          <p style={{ margin: 0 }}>No checkups recorded yet.</p>
-          <p style={{ margin: '6px 0 0', fontSize: '12px', opacity: 0.7 }}>
-            Run a clinical analysis and your results will be stored here for longitudinal tracking.
+          <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 600, color: 'var(--text-primary)' }}>No report scanned yet</h3>
+          <p style={{ margin: '6px 0 0', fontSize: '13px', opacity: 0.7 }}>
+            Upload and scan clinical documents or imaging reports to build your longitudinal timeline.
           </p>
         </div>
       ) : (

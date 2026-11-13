@@ -459,10 +459,10 @@ export default function App({ user = null, token = null, onSignOut = null }) {
             type="button"
             className={`sidebar-nav-item ${activeTab === 'universal' ? 'active' : ''}`}
             onClick={() => setActiveTab('universal')}
-            title="Universal Scanner"
+            title="Report Scanner"
           >
             <FileText size={16} strokeWidth={1.5} />
-            <span>Universal Scanner</span>
+            <span>Report Scanner</span>
           </button>
 
           <button 
@@ -552,7 +552,7 @@ export default function App({ user = null, token = null, onSignOut = null }) {
 
             <div>
               <h1 className="navbar-page-title">
-                {activeTab === 'universal' && 'Universal Report Scanner & Prevention'}
+                {activeTab === 'universal' && 'Report Scanner & Prevention'}
                 {activeTab === 'imaging' && 'Clinical Imaging & Waveforms'}
                 {activeTab === 'presets' && 'Pre-configured Clinical Cases'}
                 {activeTab === 'heart' && 'Cardiology Risk Assessment'}

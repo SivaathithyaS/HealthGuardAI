@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
@@ -153,26 +153,27 @@ export default function AuthPage({ onAuthenticated }) {
     }
   };
 
-  const handleDemoAccess = async () => {
-    setBusy(true);
+  useEffect(() => {
     try {
-      const data = await request('/api/auth/login', {
-        email: 'clinician@healthguard.ai',
-        password: 'Password123!'
-      });
-      const token = data.access_token || data.token;
-      onAuthenticated(token, data.user);
-    } catch {
-      // Fallback: use ephemeral demo token
-      onAuthenticated('demo-clinician-session', {
-        name: 'Dr. Sarah Lin, MD',
-        email: 'clinician@healthguard.ai',
-        role: 'Clinician'
-      });
-    } finally {
-      setBusy(false);
+      const prefillRaw = sessionStorage.getItem('healthguard_auth_prefill');
+      if (prefillRaw) {
+        sessionStorage.removeItem('healthguard_auth_prefill');
+        const prefill = JSON.parse(prefillRaw);
+        if (prefill.mode) {
+          setMode(prefill.mode);
+        }
+        if (prefill.name) {
+          setForm((prev) => ({ ...prev, name: prefill.name }));
+          setNotice({
+            type: 'info',
+            text: `Creating a new personalized account for ${prefill.name}. Enter your email & password to continue.`
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('Error reading auth prefill:', e);
     }
-  };
+  }, []);
 
   const isRegister = mode === 'register';
   const isForgot = mode === 'forgot';
@@ -443,18 +444,6 @@ export default function AuthPage({ onAuthenticated }) {
               ? <><ArrowLeft size={16} /> Back to sign in</>
               : <>Create an account <ArrowRight size={16} /></>}
           </button>
-
-          {mode === 'signin' && (
-            <button
-              className="auth-switch"
-              type="button"
-              style={{ marginTop: '12px', background: 'rgba(27, 67, 50, 0.08)', color: 'var(--accent-forest)' }}
-              onClick={handleDemoAccess}
-            >
-              <HeartPulse size={16} /> Quick Clinician Demo Access
-            </button>
-          )}
-
         </div>
 
         <div className="auth-bottom-note">

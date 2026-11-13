@@ -314,7 +314,7 @@ export default function HealthHistory({ user, token, onNavigateToScanner }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const effectiveToken = token || sessionStorage.getItem('healthguard_access_token') || 'demo-clinician-session';
+  const effectiveToken = token || sessionStorage.getItem('healthguard_access_token');
 
   const fetchHistory = useCallback(async () => {
     setLoading(true);

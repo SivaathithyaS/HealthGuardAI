@@ -143,15 +143,12 @@ def send_registration_otp(req: RegisterSendOtpRequest):
                        "Please check your inbox (and spam folder)."
         }
     else:
-        # SMTP not configured → surface OTP in response for dev/demo
-        demo_otp = result.get("demo_otp", otp_code)
-        return {
-            "message": (
-                f"Verification code generated. "
-                f"(Email not configured — Demo OTP: {demo_otp})"
-            ),
-            "demo_otp": demo_otp
-        }
+        reason = result.get("reason", "SMTP delivery failure")
+        print(f"[Registration OTP Delivery Error] {reason}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unable to dispatch verification email: {reason}. Please check your email address."
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -170,7 +167,7 @@ def verify_registration_otp(req: VerifyOtpRequest):
         )
 
     submitted_otp = req.otp.strip()
-    if submitted_otp not in (pending["otp"], "123456"):
+    if submitted_otp != pending["otp"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Incorrect verification code. Please check your email and try again."

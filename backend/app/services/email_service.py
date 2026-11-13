@@ -69,8 +69,7 @@ class EmailService:
         if not self.is_configured():
             return {
                 "sent": False,
-                "reason": "SMTP_USER or SMTP_PASSWORD not configured in .env",
-                "demo_otp": otp_code
+                "reason": "SMTP_USER or SMTP_PASSWORD not configured in .env"
             }
 
         subject = f"Your HealthGuard AI Verification Code: {otp_code}"
@@ -169,8 +168,7 @@ class EmailService:
             # Fallback if connection fails (e.g. incorrect App Password or blocked port)
             return {
                 "sent": False,
-                "reason": f"SMTP dispatch error: {str(e)}",
-                "demo_otp": otp_code
+                "reason": f"SMTP dispatch error: {str(e)}"
             }
 
 email_service = EmailService()

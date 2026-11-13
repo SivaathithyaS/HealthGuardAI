@@ -60,18 +60,28 @@ def parse_patient_demographics(text: str) -> PatientContext:
 
     # 3. PATIENT NAME EXTRACTION
     name = "Clinical Patient (Extracted)"
+    invalid_name_words = {
+        'report', 'record', 'clinical', 'comprehensive', 'assessment', 
+        'evaluation', 'summary', 'portal', 'hospital', 'center', 'history', 
+        'discharge', 'admission', 'information', 'demographics', 'details', 'fabricated'
+    }
     name_patterns = [
-        r'\b(?:PATIENT(?:\s+NAME)?|PT\s+NAME|NAME)\s*[:\s]+([A-Za-z\s\.\(\)\'-]+?)(?=(?:\s{2,}|\s+(?:MRN|PID|Age|Sex|Gender|DOB|Study|Accession|Exam|Ward|Bed|Priority|Status)\b|$|\n))',
-        r'\bPatient\s*:\s*([A-Za-z\s\.\(\)\'-]+?)(?=(?:\s{2,}|MRN|Age|\n|$))'
+        r'\b(?:PATIENT\s+NAME|PT\s+NAME)\s*[:\s]+([A-Za-z\s\.\(\)\'-]+?)(?=(?:\s{2,}|\s+(?:MRN|PID|Age|Sex|Gender|DOB|Study|Accession|Exam|Ward|Bed|Priority|Status)\b|$|\n))',
+        r'\bPatient\s*:\s*([A-Za-z\s\.\(\)\'-]+?)(?=(?:\s{2,}|MRN|Age|\n|$))',
+        r'\bNAME\s*:\s*([A-Za-z\s\.\(\)\'-]+?)(?=(?:\s{2,}|\s+(?:MRN|PID|Age|Sex|Gender|DOB|Study|Accession|Exam|Ward|Bed|Priority|Status)\b|$|\n))',
+        r'\bPATIENT\s*:\s*([A-Za-z\s\.\(\)\'-]+?)(?=(?:\s{2,}|\s+(?:MRN|PID|Age|Sex|Gender|DOB|Study|Accession|Exam|Ward|Bed|Priority|Status)\b|$|\n))',
     ]
     for pat in name_patterns:
-        m = re.search(pat, text, re.IGNORECASE)
-        if m:
-            cand = m.group(1).strip()
-            cand = re.sub(r'\s+', ' ', cand)
-            if len(cand) > 2 and "fabricated" not in cand.lower() and cand.lower() not in ["information", "demographics", "details"]:
+        found_name = False
+        for m in re.finditer(pat, text, re.IGNORECASE):
+            cand = re.sub(r'\s+', ' ', m.group(1).strip())
+            tokens = set(cand.lower().split())
+            if len(cand) > 2 and not any(w in tokens for w in invalid_name_words):
                 name = cand
+                found_name = True
                 break
+        if found_name:
+            break
 
     # 4. MRN / PATIENT ID / ACCESSION
     mrn = "MRN-PENDING"

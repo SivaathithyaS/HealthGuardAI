@@ -1,13 +1,14 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Header, Query
+from fastapi import APIRouter, UploadFile, File, HTTPException, Header, Query, status
 from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
+import re
 import joblib
 import os
 import pandas as pd
 import numpy as np
 from datetime import datetime, timezone
 
-from backend.app.services.universal_disease_service import universal_disease_service
+from backend.app.services.universal_disease_service import universal_disease_service, parse_patient_demographics
 from backend.app.schemas.universal_disease import UniversalDiseaseAnalysisResult
 from backend.app.schemas.heart import HeartFeatures, PredictionResponse
 from backend.app.schemas.multi_disease import DiabetesFeatures, CKDFeatures, LiverFeatures
@@ -93,6 +94,75 @@ DATA_DIR = "backend/data"
 class TextAnalysisRequest(BaseModel):
     text: str
 
+# ─────────────────────────────────────────────────────────────────────────────
+# PERSONALIZED AI PATIENT IDENTITY VERIFICATION
+# ─────────────────────────────────────────────────────────────────────────────
+def _normalize_name(name: str) -> str:
+    if not name:
+        return ""
+    cleaned = re.sub(r'\b(dr|mr|mrs|ms|miss|master)\b\.?', '', name, flags=re.IGNORECASE)
+    cleaned = re.sub(r'\((synthetic|fabricated|extracted)\)', '', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'\b(synthetic|fabricated|extracted)\b', '', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'[^\w\s]', ' ', cleaned)
+    return ' '.join(cleaned.lower().split())
+
+def _is_generic_patient_name(name: str) -> bool:
+    norm = _normalize_name(name)
+    generic = {'clinical patient', 'patient', 'anonymous patient', 'unknown', 'n a', 'unspecified', ''}
+    return norm in generic
+
+def _patient_name_matches_user(report_name: str, user_name: str) -> bool:
+    if _is_generic_patient_name(report_name):
+        return True
+    norm_report = _normalize_name(report_name)
+    norm_user = _normalize_name(user_name)
+    if not norm_user:
+        return True
+    if norm_report == norm_user:
+        return True
+    rep_tokens = set(t for t in norm_report.split() if len(t) > 1)
+    usr_tokens = set(t for t in norm_user.split() if len(t) > 1)
+    if not rep_tokens or not usr_tokens:
+        return True
+    if rep_tokens.issubset(usr_tokens) or usr_tokens.issubset(rep_tokens):
+        return True
+    if len(rep_tokens.intersection(usr_tokens)) >= 2:
+        return True
+    return False
+
+def _verify_patient_identity(text: str, authorization: Optional[str]):
+    """
+    Checks if the patient name in the clinical report matches the authenticated user name.
+    If it does not match, halts BEFORE running any analysis and raises HTTP 403 PATIENT_NAME_MISMATCH.
+    """
+    if not authorization:
+        return
+    token = authorization.split(" ", 1)[1].strip() if authorization.lower().startswith("bearer ") else authorization.strip()
+    user = user_db.validate_session(token)
+    if not user or not user.get("name"):
+        return
+
+    demographics = parse_patient_demographics(text)
+    report_patient_name = demographics.name
+    user_name = user["name"]
+
+    if not _is_generic_patient_name(report_patient_name):
+        if not _patient_name_matches_user(report_patient_name, user_name):
+            clean_display_name = re.sub(r'\s*\((?:synthetic|fabricated|extracted)\)\s*', '', report_patient_name, flags=re.I).strip()
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": "PATIENT_NAME_MISMATCH",
+                    "patient_name": clean_display_name or report_patient_name,
+                    "user_name": user_name,
+                    "message": (
+                        f"Personalized AI Security Check: The uploaded report belongs to '{clean_display_name or report_patient_name}', "
+                        f"which does not match your active user account ('{user_name}'). "
+                        "HealthGuard AI is an individualized clinical AI platform and cannot process reports for another individual under this account."
+                    )
+                }
+            )
+
 # -------------------------------------------------------------
 # 1. UNIVERSAL DISEASE & REPORT ANALYSIS ENDPOINTS
 # -------------------------------------------------------------
@@ -108,15 +178,20 @@ def start_universal_analysis_text(
 ):
     if not req.text or len(req.text.strip()) < 10:
         raise HTTPException(status_code=400, detail="Clinical report text is too short or empty.")
+    _verify_patient_identity(req.text, authorization)
     result = universal_disease_service.analyze_clinical_text(req.text)
     if save_to_history:
         _try_save_analysis_checkup(result, authorization)
     return result
 
 @router.post("/analysis/start", response_model=UnifiedAnalysisResponse)
-def start_unified_analysis_text(req: TextAnalysisRequest):
+def start_unified_analysis_text(
+    req: TextAnalysisRequest,
+    authorization: Optional[str] = Header(default=None)
+):
     if not req.text or len(req.text.strip()) < 10:
         raise HTTPException(status_code=400, detail="Clinical report text is too short or empty.")
+    _verify_patient_identity(req.text, authorization)
     return multi_disease_service.run_analysis(req.text)
 
 @router.post("/analysis/upload", response_model=UniversalDiseaseAnalysisResult)
@@ -141,6 +216,9 @@ async def start_analysis_upload(
 
         if not extracted_text or len(extracted_text.strip()) < 10:
             raise HTTPException(status_code=400, detail="Could not extract readable text from the uploaded document.")
+
+        # Guardrail check: verify patient name matches logged-in user before scanning
+        _verify_patient_identity(extracted_text, authorization)
 
         result = universal_disease_service.analyze_clinical_text(extracted_text)
         if save_to_history:

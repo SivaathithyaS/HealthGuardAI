@@ -1,6 +1,7 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Header, Query, BackgroundTasks
+from fastapi import APIRouter, UploadFile, File, HTTPException, Header, Query, BackgroundTasks, status
 from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
+import re
 import joblib
 import os
 import threading
@@ -8,7 +9,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timezone
 
-from backend.app.services.universal_disease_service import universal_disease_service
+from backend.app.services.universal_disease_service import universal_disease_service, parse_patient_demographics
 from backend.app.schemas.universal_disease import UniversalDiseaseAnalysisResult
 from backend.app.schemas.heart import HeartFeatures, PredictionResponse
 from backend.app.schemas.multi_disease import DiabetesFeatures, CKDFeatures, LiverFeatures
@@ -92,6 +93,21 @@ def _try_save_analysis_checkup(result, authorization: "Optional[str]"):
             findings=findings,
             recommendations=recommendations,
         )
+        # Auto-record audit log entry for the scanned report
+        user_db.save_user_feedback(
+            user_id=user["id"],
+            entry={
+                "case_id": getattr(getattr(result, "patient_context", None), "mrn", None) or "DOC-UPLOAD",
+                "patient_name": getattr(getattr(result, "patient_context", None), "name", None) or user.get("name") or "Anonymous Patient",
+                "condition_name": cond,
+                "original_score": score,
+                "action": "SCANNED",
+                "override_text": f"Modality: {spec}",
+                "override_reason": f"Diagnostic report scanned ({acuity}). AI risk score: {score:.0f}/100.",
+                "clinician_id": f"{user.get('name', 'Attending Clinician')} ({user.get('role', 'Clinician')})",
+                "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+            }
+        )
         # Trigger background comparison + narration in a daemon thread
         t = threading.Thread(
             target=_run_compare_and_narrate,
@@ -109,6 +125,75 @@ DATA_DIR = "backend/data"
 class TextAnalysisRequest(BaseModel):
     text: str
 
+# ─────────────────────────────────────────────────────────────────────────────
+# PERSONALIZED AI PATIENT IDENTITY VERIFICATION
+# ─────────────────────────────────────────────────────────────────────────────
+def _normalize_name(name: str) -> str:
+    if not name:
+        return ""
+    cleaned = re.sub(r'\b(dr|mr|mrs|ms|miss|master)\b\.?', '', name, flags=re.IGNORECASE)
+    cleaned = re.sub(r'\((synthetic|fabricated|extracted)\)', '', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'\b(synthetic|fabricated|extracted)\b', '', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'[^\w\s]', ' ', cleaned)
+    return ' '.join(cleaned.lower().split())
+
+def _is_generic_patient_name(name: str) -> bool:
+    norm = _normalize_name(name)
+    generic = {'clinical patient', 'patient', 'anonymous patient', 'unknown', 'n a', 'unspecified', ''}
+    return norm in generic
+
+def _patient_name_matches_user(report_name: str, user_name: str) -> bool:
+    if _is_generic_patient_name(report_name):
+        return True
+    norm_report = _normalize_name(report_name)
+    norm_user = _normalize_name(user_name)
+    if not norm_user:
+        return True
+    if norm_report == norm_user:
+        return True
+    rep_tokens = set(t for t in norm_report.split() if len(t) > 1)
+    usr_tokens = set(t for t in norm_user.split() if len(t) > 1)
+    if not rep_tokens or not usr_tokens:
+        return True
+    if rep_tokens.issubset(usr_tokens) or usr_tokens.issubset(rep_tokens):
+        return True
+    if len(rep_tokens.intersection(usr_tokens)) >= 2:
+        return True
+    return False
+
+def _verify_patient_identity(text: str, authorization: Optional[str]):
+    """
+    Checks if the patient name in the clinical report matches the authenticated user name.
+    If it does not match, halts BEFORE running any analysis and raises HTTP 403 PATIENT_NAME_MISMATCH.
+    """
+    if not authorization:
+        return
+    token = authorization.split(" ", 1)[1].strip() if authorization.lower().startswith("bearer ") else authorization.strip()
+    user = user_db.validate_session(token)
+    if not user or not user.get("name"):
+        return
+
+    demographics = parse_patient_demographics(text)
+    report_patient_name = demographics.name
+    user_name = user["name"]
+
+    if not _is_generic_patient_name(report_patient_name):
+        if not _patient_name_matches_user(report_patient_name, user_name):
+            clean_display_name = re.sub(r'\s*\((?:synthetic|fabricated|extracted)\)\s*', '', report_patient_name, flags=re.I).strip()
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": "PATIENT_NAME_MISMATCH",
+                    "patient_name": clean_display_name or report_patient_name,
+                    "user_name": user_name,
+                    "message": (
+                        f"Personalized AI Security Check: The uploaded report belongs to '{clean_display_name or report_patient_name}', "
+                        f"which does not match your active user account ('{user_name}'). "
+                        "HealthGuard AI is an individualized clinical AI platform and cannot process reports for another individual under this account."
+                    )
+                }
+            )
+
 # -------------------------------------------------------------
 # 1. UNIVERSAL DISEASE & REPORT ANALYSIS ENDPOINTS
 # -------------------------------------------------------------
@@ -124,15 +209,20 @@ def start_universal_analysis_text(
 ):
     if not req.text or len(req.text.strip()) < 10:
         raise HTTPException(status_code=400, detail="Clinical report text is too short or empty.")
+    _verify_patient_identity(req.text, authorization)
     result = universal_disease_service.analyze_clinical_text(req.text)
     if save_to_history:
         _try_save_analysis_checkup(result, authorization)
     return result
 
 @router.post("/analysis/start", response_model=UnifiedAnalysisResponse)
-def start_unified_analysis_text(req: TextAnalysisRequest):
+def start_unified_analysis_text(
+    req: TextAnalysisRequest,
+    authorization: Optional[str] = Header(default=None)
+):
     if not req.text or len(req.text.strip()) < 10:
         raise HTTPException(status_code=400, detail="Clinical report text is too short or empty.")
+    _verify_patient_identity(req.text, authorization)
     return multi_disease_service.run_analysis(req.text)
 
 @router.post("/analysis/upload", response_model=UniversalDiseaseAnalysisResult)
@@ -157,6 +247,9 @@ async def start_analysis_upload(
 
         if not extracted_text or len(extracted_text.strip()) < 10:
             raise HTTPException(status_code=400, detail="Could not extract readable text from the uploaded document.")
+
+        # Guardrail check: verify patient name matches logged-in user before scanning
+        _verify_patient_identity(extracted_text, authorization)
 
         result = universal_disease_service.analyze_clinical_text(extracted_text)
         if save_to_history:
@@ -408,58 +501,43 @@ class ClinicianFeedbackRequest(BaseModel):
     clinician_id: Optional[str] = "Dr. M. Chen (Attending Physician)"
     timestamp: Optional[str] = None
 
-FEEDBACK_STORE: List[Dict[str, Any]] = [
-    {
-        "id": "fb-seed-001",
-        "case_id": "CASE-001",
-        "patient_name": "Marcus Bennett (68yo M)",
-        "condition_name": "Acute Ischemic Stroke with Right M1 Large Vessel Occlusion (LVO)",
-        "original_score": 94.0,
-        "action": "CONFIRMED",
-        "override_text": None,
-        "override_reason": "Verified CTA M1 cut-off and matching acute left-sided hemiparesis. Activated emergent mechanical thrombectomy team.",
-        "clinician_id": "Dr. R. Alvarez, MD (Vascular Neurology)",
-        "timestamp": "2026-09-28 14:22:10 UTC"
-    },
-    {
-        "id": "fb-seed-002",
-        "case_id": "CASE-003",
-        "patient_name": "Elena Kovacs (47yo F)",
-        "condition_name": "High-Grade Infiltrative Intra-Axial Glioma (Suspected Glioblastoma)",
-        "original_score": 91.0,
-        "action": "CONFIRMED",
-        "override_text": None,
-        "override_reason": "Nodular peripheral enhancement and 7mm midline shift confirmed on post-contrast T1. Scheduled emergent neurosurgical consultation.",
-        "clinician_id": "Dr. S. Thornton, MD (Neuro-Oncology)",
-        "timestamp": "2026-09-29 09:15:45 UTC"
-    }
-]
+def _resolve_feedback_user_id(authorization: Optional[str]) -> str:
+    if not authorization:
+        return "guest"
+    token = authorization.split(" ", 1)[1].strip() if authorization.lower().startswith("bearer ") else authorization.strip()
+    user = user_db.validate_session(token)
+    if user:
+        return user["id"]
+    return "guest"
 
 @router.post("/feedback/log")
-def log_clinician_feedback(req: ClinicianFeedbackRequest):
+def log_clinician_feedback(
+    req: ClinicianFeedbackRequest,
+    authorization: Optional[str] = Header(default=None)
+):
+    user_id = _resolve_feedback_user_id(authorization)
     entry = req.model_dump()
-    if not entry.get("id"):
-        entry["id"] = f"fb-{len(FEEDBACK_STORE) + 1:03d}"
-    if not entry.get("timestamp"):
-        entry["timestamp"] = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-    FEEDBACK_STORE.append(entry)
+    saved = user_db.save_user_feedback(user_id=user_id, entry=entry)
+    user_feedback = user_db.get_user_feedback(user_id)
     return {
         "status": "success",
         "message": f"Clinical feedback '{req.action}' recorded successfully.",
-        "entry": entry,
-        "total_logged": len(FEEDBACK_STORE)
+        "entry": saved,
+        "total_logged": len(user_feedback)
     }
 
 @router.get("/feedback/history")
-def get_feedback_history():
+def get_feedback_history(authorization: Optional[str] = Header(default=None)):
+    user_id = _resolve_feedback_user_id(authorization)
+    history = user_db.get_user_feedback(user_id)
     return {
-        "total_entries": len(FEEDBACK_STORE),
-        "history": sorted(FEEDBACK_STORE, key=lambda x: x.get("timestamp", ""), reverse=True)
+        "total_entries": len(history),
+        "history": history
     }
 
 @router.delete("/feedback/clear")
-def clear_feedback_history():
-    global FEEDBACK_STORE
-    FEEDBACK_STORE = []
+def clear_feedback_history(authorization: Optional[str] = Header(default=None)):
+    user_id = _resolve_feedback_user_id(authorization)
+    user_db.clear_user_feedback(user_id)
     return {"status": "success", "message": "Feedback log cleared."}
 

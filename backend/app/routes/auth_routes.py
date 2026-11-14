@@ -13,6 +13,7 @@ Real authentication with:
 
 import secrets
 import threading
+from datetime import datetime, timezone
 from typing import Optional
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, status, Header
@@ -143,15 +144,12 @@ def send_registration_otp(req: RegisterSendOtpRequest):
                        "Please check your inbox (and spam folder)."
         }
     else:
-        # SMTP not configured → surface OTP in response for dev/demo
-        demo_otp = result.get("demo_otp", otp_code)
-        return {
-            "message": (
-                f"Verification code generated. "
-                f"(Email not configured — Demo OTP: {demo_otp})"
-            ),
-            "demo_otp": demo_otp
-        }
+        reason = result.get("reason", "SMTP delivery failure")
+        print(f"[Registration OTP Delivery Error] {reason}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unable to dispatch verification email: {reason}. Please check your email address."
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -170,7 +168,7 @@ def verify_registration_otp(req: VerifyOtpRequest):
         )
 
     submitted_otp = req.otp.strip()
-    if submitted_otp not in (pending["otp"], "123456"):
+    if submitted_otp != pending["otp"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Incorrect verification code. Please check your email and try again."
@@ -300,6 +298,21 @@ def save_checkup(
         findings=req.findings,
         recommendations=req.recommendations,
     )
+    # Also log audit trail entry for the scanned checkup
+    user_db.save_user_feedback(
+        user_id=user["id"],
+        entry={
+            "case_id": f"CHK-{saved.get('id', 'REC')[:8]}",
+            "patient_name": user.get("name") or "Patient",
+            "condition_name": req.title,
+            "original_score": req.risk_score,
+            "action": "SCANNED",
+            "override_text": f"Modality: {req.modality}",
+            "override_reason": req.summary,
+            "clinician_id": f"{user.get('name', 'Attending Clinician')} ({user.get('role', 'Clinician')})",
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        }
+    )
     # Trigger background comparison + narration
     def _bg_compare():
         try:
@@ -369,7 +382,8 @@ def delete_checkup_endpoint(
 ):
     """Deletes a specific checkup belonging to the authenticated user."""
     user = _require_auth(authorization)
-    deleted = user_db.delete_user_checkup(user["id"], checkup_id)
+    is_clinician = user.get("role") == "Clinician"
+    deleted = user_db.delete_user_checkup(user["id"], checkup_id, is_clinician=is_clinician)
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

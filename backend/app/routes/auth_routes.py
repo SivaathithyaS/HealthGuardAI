@@ -12,6 +12,7 @@ Real authentication with:
 """
 
 import secrets
+import threading
 from typing import Optional
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, status, Header
@@ -243,10 +244,30 @@ def get_my_history(
     limit: int = 25,
     authorization: Optional[str] = Header(default=None)
 ):
-    """Returns the checkup timeline for the authenticated user only."""
+    """Returns the checkup timeline for the authenticated user only, with comparison+narrative."""
     user = _require_auth(authorization)
     timeline = user_db.get_user_timeline(user_id=user["id"], limit=limit)
-    comparison = user_db.compute_longitudinal_comparison(user_id=user["id"])
+
+    # Get stored comparison for the latest checkup, or compute on-the-fly
+    latest_id = timeline[0]["id"] if timeline else None
+    comparison = None
+    narrative = None
+
+    if latest_id:
+        stored = user_db.get_comparison_for_checkup(latest_id)
+        if stored and stored.get("comparison"):
+            comparison = stored["comparison"]
+            narrative = stored.get("narrative")
+        else:
+            # Compute deterministic comparison on-the-fly (no LLM)
+            from backend.app.services.longitudinal_service import compute_comparison
+            from backend.app.services.llm_narrator import template_narrator
+            result = compute_comparison(user["id"], timeline, latest_id)
+            comparison = result.model_dump()
+            narrative = template_narrator(comparison)
+    else:
+        from backend.app.services.user_db_service import user_db as _udb
+        comparison = _udb.compute_longitudinal_comparison(user["id"])
 
     return {
         "user": {
@@ -256,6 +277,8 @@ def get_my_history(
         },
         "checkups": timeline,
         "longitudinal": comparison,
+        "comparison": comparison,
+        "narrative": narrative,
         "total": len(timeline)
     }
 
@@ -275,9 +298,68 @@ def save_checkup(
         risk_score=req.risk_score,
         biomarkers=req.biomarkers,
         findings=req.findings,
-        recommendations=req.recommendations
+        recommendations=req.recommendations,
     )
+    # Trigger background comparison + narration
+    def _bg_compare():
+        try:
+            from backend.app.services.longitudinal_service import compute_comparison
+            from backend.app.services.llm_narrator import narrate
+            timeline = user_db.get_user_timeline(user_id=user["id"], limit=25)
+            result = compute_comparison(user["id"], timeline, saved["id"])
+            result_dict = result.model_dump()
+            narrative = narrate(result_dict, user_id=user["id"])
+            user_db.save_comparison(
+                user_id=user["id"],
+                current_checkup_id=saved["id"],
+                prior_checkup_id=result_dict.get("prior_id"),
+                result_dict=result_dict,
+                narrative_dict=narrative,
+                narrative_source=narrative.get("narrative_source", "template"),
+                llm_model=narrative.get("llm_model"),
+            )
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning("bg_compare failed: %s", exc)
+    threading.Thread(target=_bg_compare, daemon=True).start()
     return {"status": "success", "checkup": saved}
+
+
+@router.post("/history/{checkup_id}/narrative/regenerate")
+def regenerate_narrative(
+    checkup_id: str,
+    authorization: Optional[str] = Header(default=None)
+):
+    """Re-runs LLM narration for a specific checkup (must belong to the authenticated user)."""
+    user = _require_auth(authorization)
+    # Verify ownership
+    timeline = user_db.get_user_timeline(user_id=user["id"], limit=25)
+    checkup = next((c for c in timeline if c["id"] == checkup_id), None)
+    if not checkup:
+        raise HTTPException(status_code=404, detail="Checkup not found or does not belong to this account.")
+
+    try:
+        from backend.app.services.longitudinal_service import compute_comparison
+        from backend.app.services.llm_narrator import narrate
+        result = compute_comparison(user["id"], timeline, checkup_id)
+        result_dict = result.model_dump()
+        narrative = narrate(result_dict, user_id=user["id"])
+        user_db.save_comparison(
+            user_id=user["id"],
+            current_checkup_id=checkup_id,
+            prior_checkup_id=result_dict.get("prior_id"),
+            result_dict=result_dict,
+            narrative_dict=narrative,
+            narrative_source=narrative.get("narrative_source", "template"),
+            llm_model=narrative.get("llm_model"),
+        )
+        return {
+            "status": "success",
+            "narrative_source": narrative.get("narrative_source"),
+            "narrative": narrative,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Narration failed: {e}")
 
 
 @router.delete("/history/{checkup_id}")

@@ -1,0 +1,514 @@
+[
+  {
+    "id": 1,
+    "description": "Single HbA1c improvement (8.2 -> 6.9)",
+    "modality": "LAB_REPORT",
+    "title": "Cardio Panel",
+    "prior": {
+      "hba1c": 8.2
+    },
+    "current": {
+      "hba1c": 6.9
+    },
+    "ground_truth": {
+      "hba1c": "improved"
+    },
+    "trajectory": "FAVORABLE_TRAJECTORY"
+  },
+  {
+    "id": 2,
+    "description": "Single creatinine worsening (1.2 -> 2.4)",
+    "modality": "LAB_REPORT",
+    "title": "Renal Panel",
+    "prior": {
+      "creatinine": 1.2
+    },
+    "current": {
+      "creatinine": 2.4
+    },
+    "ground_truth": {
+      "creatinine": "worsened"
+    },
+    "trajectory": "ATTENTION_REQUIRED"
+  },
+  {
+    "id": 3,
+    "description": "Mixed: LDL improved, BP worsened",
+    "modality": "LAB_REPORT",
+    "title": "Cardio Panel",
+    "prior": {
+      "ldl": 170.0,
+      "systolic_bp": 125.0
+    },
+    "current": {
+      "ldl": 110.0,
+      "systolic_bp": 155.0
+    },
+    "ground_truth": {
+      "ldl": "improved",
+      "systolic_bp": "worsened"
+    },
+    "trajectory": "MIXED"
+  },
+  {
+    "id": 4,
+    "description": "No change (glucose 90 -> 95)",
+    "modality": "LAB_REPORT",
+    "title": "Glucose Screen",
+    "prior": {
+      "fasting_glucose": 90.0
+    },
+    "current": {
+      "fasting_glucose": 95.0
+    },
+    "ground_truth": {
+      "fasting_glucose": "unchanged"
+    },
+    "trajectory": "STABLE_MAINTENANCE"
+  },
+  {
+    "id": 5,
+    "description": "Tiny noise (BMI 28.5 -> 28.6)",
+    "modality": "LAB_REPORT",
+    "title": "Metabolic Panel",
+    "prior": {
+      "bmi": 28.5
+    },
+    "current": {
+      "bmi": 28.6
+    },
+    "ground_truth": {
+      "bmi": "unchanged"
+    },
+    "trajectory": "STABLE_MAINTENANCE"
+  },
+  {
+    "id": 6,
+    "description": "Missing biomarker in one visit",
+    "modality": "LAB_REPORT",
+    "prior": {
+      "hba1c": 8.0
+    },
+    "current": {
+      "ldl": 120.0
+    },
+    "ground_truth": {},
+    "trajectory": "NOT_COMPARABLE",
+    "title_prior": "Thyroid Panel",
+    "title_current": "Iron Panel"
+  },
+  {
+    "id": 7,
+    "description": "Unit mismatch: glucose in mmol/L prior, mg/dL current",
+    "modality": "LAB_REPORT",
+    "title": "Glucose Screen",
+    "prior": {
+      "fasting_glucose": "7.0 mmol/L"
+    },
+    "current": {
+      "fasting_glucose": "96 mg/dL"
+    },
+    "ground_truth": {
+      "fasting_glucose": "improved"
+    },
+    "trajectory": "FAVORABLE_TRAJECTORY"
+  },
+  {
+    "id": 8,
+    "description": "Mismatched modality -> NOT_COMPARABLE",
+    "modality_prior": "LAB_REPORT",
+    "modality_current": "ECG_REPORT",
+    "title": "Panel",
+    "prior": {
+      "hba1c": 7.0,
+      "ldl": 150.0
+    },
+    "current": {
+      "hba1c": 6.5,
+      "ldl": 130.0
+    },
+    "ground_truth": {},
+    "trajectory": "NOT_COMPARABLE"
+  },
+  {
+    "id": 9,
+    "description": "Censored values skipped",
+    "modality": "LAB_REPORT",
+    "title": "Iron Panel",
+    "prior": {
+      "serum_ferritin": "<5"
+    },
+    "current": {
+      "serum_ferritin": ">200"
+    },
+    "ground_truth": {
+      "ferritin": "censored_skipped"
+    },
+    "trajectory": "STABLE_MAINTENANCE"
+  },
+  {
+    "id": 10,
+    "description": "3-visit trend: HbA1c declining",
+    "modality": "LAB_REPORT",
+    "title": "Cardio Panel",
+    "visits": [
+      {
+        "hba1c": 9.0
+      },
+      {
+        "hba1c": 8.0
+      },
+      {
+        "hba1c": 7.0
+      }
+    ],
+    "ground_truth": {
+      "hba1c": "improved"
+    },
+    "trajectory": "FAVORABLE_TRAJECTORY"
+  },
+  {
+    "id": 11,
+    "description": "Total cholesterol improved (240 -> 198)",
+    "modality": "LAB_REPORT",
+    "title": "Lipid Panel",
+    "prior": {
+      "total_cholesterol": 240.0
+    },
+    "current": {
+      "total_cholesterol": 198.0
+    },
+    "ground_truth": {
+      "total_cholesterol": "improved"
+    },
+    "trajectory": "FAVORABLE_TRAJECTORY"
+  },
+  {
+    "id": 12,
+    "description": "Total cholesterol worsened (195 -> 245)",
+    "modality": "LAB_REPORT",
+    "title": "Lipid Panel",
+    "prior": {
+      "total_cholesterol": 195.0
+    },
+    "current": {
+      "total_cholesterol": 245.0
+    },
+    "ground_truth": {
+      "total_cholesterol": "worsened"
+    },
+    "trajectory": "ATTENTION_REQUIRED"
+  },
+  {
+    "id": 13,
+    "description": "HDL improved (35 -> 55)",
+    "modality": "LAB_REPORT",
+    "title": "Lipid Panel",
+    "prior": {
+      "hdl": 35.0
+    },
+    "current": {
+      "hdl": 55.0
+    },
+    "ground_truth": {
+      "hdl": "improved"
+    },
+    "trajectory": "FAVORABLE_TRAJECTORY"
+  },
+  {
+    "id": 14,
+    "description": "HDL worsened (55 -> 35)",
+    "modality": "LAB_REPORT",
+    "title": "Lipid Panel",
+    "prior": {
+      "hdl": 55.0
+    },
+    "current": {
+      "hdl": 35.0
+    },
+    "ground_truth": {
+      "hdl": "worsened"
+    },
+    "trajectory": "ATTENTION_REQUIRED"
+  },
+  {
+    "id": 15,
+    "description": "BP both improved systolic+diastolic",
+    "modality": "LAB_REPORT",
+    "title": "Cardio Panel",
+    "prior": {
+      "systolic_bp": 150.0,
+      "diastolic_bp": 95.0
+    },
+    "current": {
+      "systolic_bp": 128.0,
+      "diastolic_bp": 82.0
+    },
+    "ground_truth": {
+      "systolic_bp": "improved",
+      "diastolic_bp": "improved"
+    },
+    "trajectory": "FAVORABLE_TRAJECTORY"
+  },
+  {
+    "id": 16,
+    "description": "Hemoglobin improved (8.4 -> 11.2)",
+    "modality": "LAB_REPORT",
+    "title": "CBC Panel",
+    "prior": {
+      "hemoglobin": 8.4
+    },
+    "current": {
+      "hemoglobin": 11.2
+    },
+    "ground_truth": {
+      "hemoglobin": "improved"
+    },
+    "trajectory": "FAVORABLE_TRAJECTORY"
+  },
+  {
+    "id": 17,
+    "description": "Hemoglobin worsened (12.0 -> 9.5)",
+    "modality": "LAB_REPORT",
+    "title": "CBC Panel",
+    "prior": {
+      "hemoglobin": 12.0
+    },
+    "current": {
+      "hemoglobin": 9.5
+    },
+    "ground_truth": {
+      "hemoglobin": "worsened"
+    },
+    "trajectory": "ATTENTION_REQUIRED"
+  },
+  {
+    "id": 18,
+    "description": "BMI improved (32 -> 29)",
+    "modality": "LAB_REPORT",
+    "title": "Metabolic Panel",
+    "prior": {
+      "bmi": 32.0
+    },
+    "current": {
+      "bmi": 29.0
+    },
+    "ground_truth": {
+      "bmi": "improved"
+    },
+    "trajectory": "FAVORABLE_TRAJECTORY"
+  },
+  {
+    "id": 19,
+    "description": "BMI worsened (25 -> 30)",
+    "modality": "LAB_REPORT",
+    "title": "Metabolic Panel",
+    "prior": {
+      "bmi": 25.0
+    },
+    "current": {
+      "bmi": 30.0
+    },
+    "ground_truth": {
+      "bmi": "worsened"
+    },
+    "trajectory": "ATTENTION_REQUIRED"
+  },
+  {
+    "id": 20,
+    "description": "eGFR worsened (75 -> 48)",
+    "modality": "LAB_REPORT",
+    "title": "Renal Panel",
+    "prior": {
+      "egfr": 75.0
+    },
+    "current": {
+      "egfr": 48.0
+    },
+    "ground_truth": {
+      "egfr": "worsened"
+    },
+    "trajectory": "ATTENTION_REQUIRED"
+  },
+  {
+    "id": 21,
+    "description": "eGFR improved (45 -> 65)",
+    "modality": "LAB_REPORT",
+    "title": "Renal Panel",
+    "prior": {
+      "egfr": 45.0
+    },
+    "current": {
+      "egfr": 65.0
+    },
+    "ground_truth": {
+      "egfr": "improved"
+    },
+    "trajectory": "FAVORABLE_TRAJECTORY"
+  },
+  {
+    "id": 22,
+    "description": "Triglycerides improved (220 -> 148)",
+    "modality": "LAB_REPORT",
+    "title": "Lipid Panel",
+    "prior": {
+      "triglycerides": 220.0
+    },
+    "current": {
+      "triglycerides": 148.0
+    },
+    "ground_truth": {
+      "triglycerides": "improved"
+    },
+    "trajectory": "FAVORABLE_TRAJECTORY"
+  },
+  {
+    "id": 23,
+    "description": "Triglycerides worsened (140 -> 230)",
+    "modality": "LAB_REPORT",
+    "title": "Lipid Panel",
+    "prior": {
+      "triglycerides": 140.0
+    },
+    "current": {
+      "triglycerides": 230.0
+    },
+    "ground_truth": {
+      "triglycerides": "worsened"
+    },
+    "trajectory": "ATTENTION_REQUIRED"
+  },
+  {
+    "id": 24,
+    "description": "MCV changed within normal range (85 -> 92)",
+    "modality": "LAB_REPORT",
+    "title": "CBC Panel",
+    "prior": {
+      "mcv": 85.0
+    },
+    "current": {
+      "mcv": 92.0
+    },
+    "ground_truth": {
+      "mcv": "changed_within_range"
+    },
+    "trajectory": "STABLE_MAINTENANCE"
+  },
+  {
+    "id": 25,
+    "description": "Ferritin improved (8 -> 45)",
+    "modality": "LAB_REPORT",
+    "title": "Iron Panel",
+    "prior": {
+      "serum_ferritin": 8.0
+    },
+    "current": {
+      "serum_ferritin": 45.0
+    },
+    "ground_truth": {
+      "ferritin": "improved"
+    },
+    "trajectory": "FAVORABLE_TRAJECTORY"
+  },
+  {
+    "id": 26,
+    "description": "Creatinine stable within range (0.8 -> 1.0)",
+    "modality": "LAB_REPORT",
+    "title": "Renal Panel",
+    "prior": {
+      "creatinine": 0.8
+    },
+    "current": {
+      "creatinine": 1.0
+    },
+    "ground_truth": {
+      "creatinine": "unchanged"
+    },
+    "trajectory": "STABLE_MAINTENANCE"
+  },
+  {
+    "id": 27,
+    "description": "All improved: full cardiometabolic panel",
+    "modality": "LAB_REPORT",
+    "title": "Cardio Panel",
+    "prior": {
+      "hba1c": 8.5,
+      "ldl": 170.0,
+      "systolic_bp": 155.0,
+      "total_cholesterol": 250.0
+    },
+    "current": {
+      "hba1c": 6.8,
+      "ldl": 110.0,
+      "systolic_bp": 125.0,
+      "total_cholesterol": 195.0
+    },
+    "ground_truth": {
+      "hba1c": "improved",
+      "ldl": "improved",
+      "systolic_bp": "improved",
+      "total_cholesterol": "improved"
+    },
+    "trajectory": "FAVORABLE_TRAJECTORY"
+  },
+  {
+    "id": 28,
+    "description": "All worsened: multi-biomarker decline",
+    "modality": "LAB_REPORT",
+    "title": "Cardio Panel",
+    "prior": {
+      "hba1c": 6.5,
+      "ldl": 110.0,
+      "systolic_bp": 125.0
+    },
+    "current": {
+      "hba1c": 9.0,
+      "ldl": 185.0,
+      "systolic_bp": 165.0
+    },
+    "ground_truth": {
+      "hba1c": "worsened",
+      "ldl": "worsened",
+      "systolic_bp": "worsened"
+    },
+    "trajectory": "ATTENTION_REQUIRED"
+  },
+  {
+    "id": 29,
+    "description": "Title mismatch but 2+ overlapping biomarkers -> COMPARED",
+    "modality": "LAB_REPORT",
+    "title_prior": "Cardio Panel",
+    "title_current": "Follow-up Panel",
+    "prior": {
+      "hba1c": 8.0,
+      "ldl": 160.0,
+      "systolic_bp": 145.0
+    },
+    "current": {
+      "hba1c": 7.0,
+      "ldl": 130.0,
+      "systolic_bp": 140.0
+    },
+    "ground_truth": {
+      "hba1c": "improved",
+      "ldl": "improved",
+      "systolic_bp": "unchanged"
+    },
+    "trajectory": "FAVORABLE_TRAJECTORY"
+  },
+  {
+    "id": 30,
+    "description": "Only 1 overlapping biomarker, title differs -> NOT_COMPARABLE",
+    "modality": "LAB_REPORT",
+    "title_prior": "Thyroid Panel",
+    "title_current": "Iron Panel",
+    "prior": {
+      "mcv": 72.0
+    },
+    "current": {
+      "mcv": 68.0
+    },
+    "ground_truth": {},
+    "trajectory": "NOT_COMPARABLE"
+  }
+]

@@ -10,7 +10,7 @@
     500
   ],
   "weights_file": "weights.pt",
-  "weights_sha256": "d14463500150900fe2776c4eb9f70f6fdbf7556d2f27b92ed7b26026ab4cdfb7",
+  "weights_sha256": "bb51d7f2457c27347599e1ff8f5cf4cfc9027577f73232fde2ea36b7e2083a78",
   "labels": [
     "Normal Sinus Rhythm",
     "Myocardial Infarction",
@@ -18,7 +18,15 @@
     "Conduction Disturbance",
     "Cardiac Hypertrophy"
   ],
-  "description": "1D ResNet trained on PTB-XL v1.0.3 (PhysioNet). Classifies Lead-II 5-second strips (500 samples at 100 Hz) into 5 diagnostic superclasses: NORM, MI, STTC, CD, HYP.",
+  "description": "1D ResNet trained on PTB-XL v1.0.3 (PhysioNet). Accepts Lead-II 10-second strips (1000 samples at 100 Hz) decimated to 500 samples with scipy.signal.resample_poly(sig, 1, 2). Classifies into 5 diagnostic superclasses: NORM, MI, STTC, CD, HYP.",
+  "preprocessing": {
+    "input_duration_sec": 10.0,
+    "input_fs_hz": 100,
+    "input_samples": 1000,
+    "decimation": "resample_poly(sig, 1, 2) -> 500 samples",
+    "normalisation": "z-score per-record (no band-pass filter)",
+    "also_accepts": "5000 samples at 500 Hz (resample_poly(sig, 1, 10) first)"
+  },
   "training": {
     "dataset": "PTB-XL v1.0.3",
     "n_train": "~17,200 ECGs (folds 1-8)",

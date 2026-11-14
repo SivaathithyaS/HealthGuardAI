@@ -1,8 +1,9 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Header, Query
+from fastapi import APIRouter, UploadFile, File, HTTPException, Header, Query, BackgroundTasks
 from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
 import joblib
 import os
+import threading
 import pandas as pd
 import numpy as np
 from datetime import datetime, timezone
@@ -23,8 +24,32 @@ from backend.app.services.multi_disease_service import multi_disease_service, Un
 from backend.app.services.user_db_service import user_db
 from backend.app.core.analysis_context import get_analysis_context
 
-def _try_save_analysis_checkup(result, authorization: Optional[str]):
-    """Auto-saves checkup into user's isolated history if request is authenticated."""
+def _run_compare_and_narrate(user_id: str, checkup_id: str):
+    """Background task: compute comparison + LLM narration and store result."""
+    try:
+        from backend.app.services.longitudinal_service import compute_comparison
+        from backend.app.services.llm_narrator import narrate
+        timeline = user_db.get_user_timeline(user_id=user_id, limit=25)
+        result = compute_comparison(user_id, timeline, checkup_id)
+        result_dict = result.model_dump()
+        narrative = narrate(result_dict, user_id=user_id)
+        user_db.save_comparison(
+            user_id=user_id,
+            current_checkup_id=checkup_id,
+            prior_checkup_id=result_dict.get("prior_id"),
+            result_dict=result_dict,
+            narrative_dict=narrative,
+            narrative_source=narrative.get("narrative_source", "template"),
+            llm_model=narrative.get("llm_model"),
+        )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("compare_and_narrate failed for %s: %s", checkup_id, e)
+
+
+def _try_save_analysis_checkup(result, authorization: "Optional[str]"):
+    """Auto-saves checkup into user's isolated history if request is authenticated.
+    After saving, triggers background comparison+narration."""
     try:
         if not authorization:
             return
@@ -37,8 +62,8 @@ def _try_save_analysis_checkup(result, authorization: Optional[str]):
         if hasattr(result, "extracted_parameters") and result.extracted_parameters:
             for p in result.extracted_parameters:
                 try:
-                    val_str = str(p.value).split()[0].replace(',', '')
-                    biomarkers[p.name.lower().replace(' ', '_')] = float(val_str)
+                    val_str = str(p.value).split()[0].replace(",", "")
+                    biomarkers[p.name.lower().replace(" ", "_")] = float(val_str)
                 except Exception:
                     pass
 
@@ -57,16 +82,23 @@ def _try_save_analysis_checkup(result, authorization: Optional[str]):
         score = float(getattr(result, "ai_evidence_score", 0.0) or 0.0)
         acuity = getattr(result, "acuity_level", "Standard")
 
-        user_db.save_user_checkup(
+        saved = user_db.save_user_checkup(
             user_id=user["id"],
-            modality=spec.upper().replace(' ', '_') if spec else "LAB_REPORT",
+            modality=spec.upper().replace(" ", "_") if spec else "LAB_REPORT",
             title=cond,
-            summary=f"AI evidence score: {score:.0f}/100 • Acuity: {acuity}",
+            summary=f"AI evidence score: {score:.0f}/100 \u2022 Acuity: {acuity}",
             risk_score=score,
             biomarkers=biomarkers,
             findings=findings,
-            recommendations=recommendations
+            recommendations=recommendations,
         )
+        # Trigger background comparison + narration in a daemon thread
+        t = threading.Thread(
+            target=_run_compare_and_narrate,
+            args=(user["id"], saved["id"]),
+            daemon=True,
+        )
+        t.start()
     except Exception as e:
         print(f"[AutoSaveCheckup Warning] {e}")
 
@@ -430,3 +462,4 @@ def clear_feedback_history():
     global FEEDBACK_STORE
     FEEDBACK_STORE = []
     return {"status": "success", "message": "Feedback log cleared."}
+

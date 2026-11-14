@@ -4,7 +4,7 @@ import {
   Activity, Calendar, ChevronDown, ChevronUp, Clock,
   HeartPulse, RefreshCw, ShieldCheck, TrendingDown, TrendingUp,
   AlertTriangle, CheckCircle2, BarChart3, Brain, Droplet, Eye,
-  Stethoscope, Info, Minus
+  Stethoscope, Info, Minus, Sparkles, FileText, RotateCcw
 } from 'lucide-react';
 
 const API_BASE = 'http://localhost:8000';
@@ -77,6 +77,233 @@ function DeltaBadge({ delta }) {
       <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{delta.prior_value} → </span>
       <span style={{ color, fontWeight: 700 }}>{delta.current_value} {delta.unit}</span>
       <span style={{ color, fontSize: '12px', fontWeight: 600 }}>{delta.delta}</span>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NarrativePanel — renders LLM/template narrative
+// ─────────────────────────────────────────────────────────────────────────────
+function NarrativePanel({ narrative, checkupId, token, onRegenerate }) {
+  const [regenerating, setRegenerating] = useState(false);
+
+  if (!narrative) return null;
+
+  const isLlm = narrative.narrative_source === 'llm';
+  const sourceColor = isLlm ? '#6366f1' : '#64748b';
+  const sourceLabel = isLlm ? 'AI-generated explanation' : 'Automatic summary';
+  const SourceIcon = isLlm ? Sparkles : FileText;
+
+  const handleRegenerate = async () => {
+    setRegenerating(true);
+    try {
+      await fetch(`${API_BASE}/api/auth/history/${checkupId}/narrative/regenerate`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (onRegenerate) onRegenerate();
+    } catch (e) {
+      console.error('Regenerate failed', e);
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
+  const trajectoryColor = (narrative.trajectory === 'FAVORABLE_TRAJECTORY' || (narrative.improved && narrative.improved.length > 0 && (!narrative.worsened || narrative.worsened.length === 0)))
+    ? '#10b981'
+    : (narrative.trajectory === 'ATTENTION_REQUIRED' || (narrative.worsened && narrative.worsened.length > 0 && (!narrative.improved || narrative.improved.length === 0)))
+    ? '#ef4444'
+    : (narrative.worsened && narrative.worsened.length > 0 && narrative.improved && narrative.improved.length > 0)
+    ? '#f59e0b'
+    : '#94a3b8';
+
+  return (
+    <div style={{
+      borderRadius: '10px', overflow: 'hidden',
+      border: `1px solid ${trajectoryColor}25`,
+      background: `${trajectoryColor}05`,
+      marginTop: '12px',
+    }}>
+      {/* Header */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: '10px',
+        padding: '12px 16px',
+        borderBottom: `1px solid ${trajectoryColor}15`,
+        background: `${trajectoryColor}08`,
+      }}>
+        <SourceIcon size={14} color={sourceColor} />
+        <span style={{ fontSize: '12px', color: sourceColor, fontWeight: 600, flex: 1 }}>
+          {sourceLabel}
+        </span>
+        <button
+          onClick={handleRegenerate}
+          disabled={regenerating}
+          title="Regenerate narrative"
+          style={{
+            display: 'flex', alignItems: 'center', gap: '4px',
+            padding: '4px 8px', borderRadius: '5px',
+            background: 'transparent', border: `1px solid ${sourceColor}40`,
+            color: sourceColor, fontSize: '11px', cursor: regenerating ? 'not-allowed' : 'pointer',
+          }}
+        >
+          <RotateCcw size={10} style={{ animation: regenerating ? 'spin 1s linear infinite' : 'none' }} />
+          {regenerating ? 'Regenerating…' : 'Regenerate'}
+        </button>
+      </div>
+
+      <div style={{ padding: '14px 16px' }}>
+        {/* Headline */}
+        {narrative.headline && (
+          <div style={{
+            fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)',
+            marginBottom: '12px', lineHeight: 1.4,
+          }}>
+            {narrative.headline}
+          </div>
+        )}
+
+        {/* Improved group */}
+        {narrative.improved && narrative.improved.length > 0 && (
+          <div style={{ marginBottom: '10px' }}>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: '#10b981', letterSpacing: '0.07em', marginBottom: '6px' }}>
+              IMPROVED
+            </div>
+            {narrative.improved.map((b, i) => (
+              <div key={i} style={{
+                display: 'flex', gap: '8px', alignItems: 'flex-start',
+                padding: '7px 10px', borderRadius: '6px',
+                background: 'rgba(16,185,129,0.06)', marginBottom: '4px',
+              }}>
+                <TrendingDown size={12} color="#10b981" style={{ marginTop: '2px', flexShrink: 0 }} />
+                <div>
+                  <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '13px' }}>
+                    {b.biomarker}
+                  </span>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '12px', marginLeft: '6px' }}>
+                    {b.from} → {b.to} {b.unit}
+                  </span>
+                  {b.note && (
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>{b.note}</div>
+                  )}
+                  {b.clinical_significance && (
+                    <div style={{
+                      fontSize: '12px', color: 'var(--text-primary)', marginTop: '4px',
+                      background: 'rgba(16,185,129,0.08)', borderLeft: '2px solid #10b981',
+                      padding: '4px 8px', borderRadius: '0 4px 4px 0', lineHeight: 1.5
+                    }}>
+                      <span style={{ fontWeight: 600, color: '#10b981' }}>Health Impact: </span>
+                      {b.clinical_significance}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Worsened group */}
+        {narrative.worsened && narrative.worsened.length > 0 && (
+          <div style={{ marginBottom: '10px' }}>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: '#ef4444', letterSpacing: '0.07em', marginBottom: '6px' }}>
+              NEEDS ATTENTION
+            </div>
+            {narrative.worsened.map((b, i) => (
+              <div key={i} style={{
+                display: 'flex', gap: '8px', alignItems: 'flex-start',
+                padding: '7px 10px', borderRadius: '6px',
+                background: 'rgba(239,68,68,0.06)', marginBottom: '4px',
+              }}>
+                <TrendingUp size={12} color="#ef4444" style={{ marginTop: '2px', flexShrink: 0 }} />
+                <div>
+                  <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '13px' }}>
+                    {b.biomarker}
+                  </span>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '12px', marginLeft: '6px' }}>
+                    {b.from} → {b.to} {b.unit}
+                  </span>
+                  {b.note && (
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>{b.note}</div>
+                  )}
+                  {b.clinical_significance && (
+                    <div style={{
+                      fontSize: '12px', color: 'var(--text-primary)', marginTop: '4px',
+                      background: 'rgba(239,68,68,0.08)', borderLeft: '2px solid #ef4444',
+                      padding: '4px 8px', borderRadius: '0 4px 4px 0', lineHeight: 1.5
+                    }}>
+                      <span style={{ fontWeight: 600, color: '#ef4444' }}>Health Impact: </span>
+                      {b.clinical_significance}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Unchanged group */}
+        {narrative.unchanged && narrative.unchanged.length > 0 && (
+          <div style={{ marginBottom: '10px' }}>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: '#94a3b8', letterSpacing: '0.07em', marginBottom: '6px' }}>
+              UNCHANGED
+            </div>
+            {narrative.unchanged.map((b, i) => (
+              <div key={i} style={{
+                display: 'flex', gap: '8px', alignItems: 'flex-start',
+                padding: '7px 10px', borderRadius: '6px',
+                background: 'rgba(148,163,184,0.05)', marginBottom: '4px',
+              }}>
+                <Minus size={12} color="#94a3b8" style={{ marginTop: '2px', flexShrink: 0 }} />
+                <div>
+                  <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '13px' }}>
+                    {b.biomarker}
+                  </span>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '12px', marginLeft: '6px' }}>
+                    {b.from} → {b.to} {b.unit}
+                  </span>
+                  {b.note && (
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>{b.note}</div>
+                  )}
+                  {b.clinical_significance && (
+                    <div style={{
+                      fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px',
+                      background: 'rgba(148,163,184,0.08)', borderLeft: '2px solid #94a3b8',
+                      padding: '4px 8px', borderRadius: '0 4px 4px 0', lineHeight: 1.5
+                    }}>
+                      <span style={{ fontWeight: 600, color: '#94a3b8' }}>Health Impact: </span>
+                      {b.clinical_significance}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Summary paragraph */}
+        {narrative.summary && (
+          <p style={{
+            fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.65,
+            marginTop: '10px', marginBottom: narrative.caveats?.length ? '8px' : 0,
+          }}>
+            {narrative.summary}
+          </p>
+        )}
+
+        {/* Caveats */}
+        {narrative.caveats && narrative.caveats.length > 0 && (
+          <div style={{ marginTop: '8px' }}>
+            {narrative.caveats.map((c, i) => (
+              <div key={i} style={{
+                fontSize: '11px', color: 'var(--text-muted)', opacity: 0.75,
+                display: 'flex', gap: '5px', alignItems: 'flex-start', marginBottom: '3px',
+              }}>
+                <Info size={10} style={{ marginTop: '2px', flexShrink: 0 }} />
+                <span>{c}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -224,28 +451,68 @@ function CheckupCard({ checkup, onDelete }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // LongitudinalPanel
 // ─────────────────────────────────────────────────────────────────────────────
-function LongitudinalPanel({ data }) {
-  if (!data || !data.has_prior_history) {
+function LongitudinalPanel({ data, narrative, checkupId, token, onRegenerate }) {
+  const status = data?.status || '';
+  const trajectory = data?.trajectory_status || data?.trajectory || '';
+
+  if (!data || (!data.has_prior_history && status === 'BASELINE') || status === 'BASELINE') {
     return (
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: '10px',
-        padding: '14px 18px', borderRadius: '10px',
-        background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.2)',
-        fontSize: '13px', color: 'var(--text-muted)'
-      }}>
-        <Info size={16} color="#10b981" />
-        <span>{data?.message || 'No prior visits on record. This is your baseline visit.'}</span>
+      <div>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '10px',
+          padding: '14px 18px', borderRadius: '10px',
+          background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.2)',
+          fontSize: '13px', color: 'var(--text-muted)'
+        }}>
+          <Info size={16} color="#10b981" />
+          <span>{data?.message || data?.summary_advice || 'No prior visits on record. This is your baseline visit.'}</span>
+        </div>
+        {narrative && (
+          <NarrativePanel
+            narrative={narrative}
+            checkupId={checkupId}
+            token={token}
+            onRegenerate={onRegenerate}
+          />
+        )}
       </div>
     );
   }
 
+  if (status === 'NOT_COMPARABLE') {
+    return (
+      <div>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '10px',
+          padding: '14px 18px', borderRadius: '10px',
+          background: 'rgba(148,163,184,0.07)', border: '1px solid rgba(148,163,184,0.2)',
+          fontSize: '13px', color: 'var(--text-muted)'
+        }}>
+          <Info size={16} color="#94a3b8" />
+          <span>{data?.not_comparable_reason || data?.summary_advice || 'No comparable prior visit found for trajectory comparison.'}</span>
+        </div>
+        {narrative && (
+          <NarrativePanel
+            narrative={narrative}
+            checkupId={checkupId}
+            token={token}
+            onRegenerate={onRegenerate}
+          />
+        )}
+      </div>
+    );
+  }
+
+  const isMixed = trajectory === 'MIXED';
   const statusColor =
-    data.trajectory_status === 'ATTENTION_REQUIRED' ? '#ef4444' :
-    data.trajectory_status === 'FAVORABLE_TRAJECTORY' ? '#10b981' : '#94a3b8';
+    trajectory === 'ATTENTION_REQUIRED' ? '#ef4444' :
+    trajectory === 'FAVORABLE_TRAJECTORY' ? '#10b981' :
+    isMixed ? '#f59e0b' : '#94a3b8';
 
   const StatusIcon =
-    data.trajectory_status === 'ATTENTION_REQUIRED' ? AlertTriangle :
-    data.trajectory_status === 'FAVORABLE_TRAJECTORY' ? TrendingDown : Activity;
+    trajectory === 'ATTENTION_REQUIRED' ? AlertTriangle :
+    trajectory === 'FAVORABLE_TRAJECTORY' ? TrendingDown :
+    isMixed ? AlertTriangle : Activity;
 
   return (
     <div style={{
@@ -261,15 +528,25 @@ function LongitudinalPanel({ data }) {
         <StatusIcon size={18} color={statusColor} />
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: '13px', fontWeight: 700, color: statusColor }}>
-            {(data.trajectory_status || 'STATUS_ESTABLISHED').replace(/_/g, ' ')}
+            {(trajectory || 'STATUS_ESTABLISHED').replace(/_/g, ' ')}
           </div>
           <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-            {data.days_since_prior} days since last visit • {data.total_visits_recorded} total visits recorded
+            {data.days_since_prior || data.days_between} days since last visit • {data.total_visits_recorded} total visits recorded
           </div>
         </div>
       </div>
 
-      {data.summary_advice && (
+      {/* Narrative panel (LLM or template) */}
+      {narrative ? (
+        <div style={{ padding: '0 18px 18px 18px' }}>
+          <NarrativePanel
+            narrative={narrative}
+            checkupId={checkupId}
+            token={token}
+            onRegenerate={onRegenerate}
+          />
+        </div>
+      ) : data.summary_advice && (
         <p style={{ padding: '12px 18px', fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6, margin: 0 }}>
           {data.summary_advice}
         </p>
@@ -343,7 +620,9 @@ export default function HealthHistory({ user, token, onNavigateToScanner }) {
   };
 
   const checkups = data?.checkups || [];
-  const longitudinal = data?.longitudinal || null;
+  const longitudinal = data?.longitudinal || data?.comparison || null;
+  const narrative = data?.narrative || null;
+  const latestCheckupId = checkups.length > 0 ? checkups[0].id : null;
 
   return (
     <div style={{ maxWidth: '820px', margin: '0 auto', padding: '16px 20px 40px' }}>
@@ -416,7 +695,13 @@ export default function HealthHistory({ user, token, onNavigateToScanner }) {
             <BarChart3 size={12} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
             LONGITUDINAL HEALTH TRAJECTORY
           </div>
-          <LongitudinalPanel data={longitudinal} />
+          <LongitudinalPanel
+            data={longitudinal}
+            narrative={narrative}
+            checkupId={latestCheckupId}
+            token={effectiveToken}
+            onRegenerate={fetchHistory}
+          />
         </div>
       )}
 

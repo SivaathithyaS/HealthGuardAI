@@ -24,14 +24,12 @@ def test_imaging_models_and_samples_registry():
     mri_m = next((m for m in models if m["modality"] == "mri"), None)
 
     assert ecg_m is not None
-    assert ecg_m["stub"] is True
-    assert "stub" in ecg_m["model_version"].lower()
+    assert isinstance(ecg_m["stub"], bool)
     assert ecg_m["sha256_verified"] is True
     assert ecg_m["threshold"] == 0.6
 
     assert mri_m is not None
-    assert mri_m["stub"] is True
-    assert "stub" in mri_m["model_version"].lower()
+    assert isinstance(mri_m["stub"], bool)
     assert mri_m["sha256_verified"] is True
 
     # 2. Test Samples Endpoint

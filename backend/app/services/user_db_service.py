@@ -5,8 +5,12 @@ import time
 import sqlite3
 import hashlib
 import secrets
+import threading
+import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 DB_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data", "healthguard.db"))
 
@@ -70,7 +74,25 @@ class UserDBService:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_checkups_user ON checkups(user_id, created_at DESC);")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);")
 
-            # 4. OTPs Table
+            # 4. Comparisons Table (visit-over-visit comparison + LLM narration)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS comparisons (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                current_checkup_id TEXT NOT NULL,
+                prior_checkup_id TEXT,
+                result_json TEXT NOT NULL,
+                narrative_json TEXT,
+                narrative_source TEXT DEFAULT 'template',
+                llm_model TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(current_checkup_id),
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_comparisons_user ON comparisons(user_id, created_at DESC);")
+
+            # 5. OTPs Table
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS otps (
                 email TEXT PRIMARY KEY,
@@ -83,6 +105,14 @@ class UserDBService:
             """)
 
             conn.commit()
+
+        # Guarded ALTER TABLE: add biomarkers_meta_json column if missing (nullable, harmless)
+        try:
+            with self._get_connection() as conn:
+                conn.execute("ALTER TABLE checkups ADD COLUMN biomarkers_meta_json TEXT")
+                conn.commit()
+        except sqlite3.OperationalError:
+            pass  # Column already exists — harmless
 
         # Seed default clinician account if not present
         self._seed_default_accounts()
@@ -334,17 +364,29 @@ class UserDBService:
             conn.commit()
 
     def delete_user_checkup(self, user_id: str, checkup_id: str) -> bool:
-        """Deletes a specific checkup strictly belonging to user_id."""
+        """Deletes a specific checkup strictly belonging to user_id, and its comparison."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
+            # Delete associated comparisons first (current or prior)
+            try:
+                cursor.execute(
+                    "DELETE FROM comparisons WHERE user_id = ? AND (current_checkup_id = ? OR prior_checkup_id = ?)",
+                    (user_id, checkup_id, checkup_id)
+                )
+            except sqlite3.OperationalError:
+                pass  # comparisons table may not exist in old DBs
             cursor.execute("DELETE FROM checkups WHERE id = ? AND user_id = ?", (checkup_id, user_id))
             conn.commit()
             return cursor.rowcount > 0
 
     def clear_user_checkups(self, user_id: str) -> bool:
-        """Clears all checkup history strictly belonging to user_id."""
+        """Clears all checkup history strictly belonging to user_id, and all comparisons."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
+            try:
+                cursor.execute("DELETE FROM comparisons WHERE user_id = ?", (user_id,))
+            except sqlite3.OperationalError:
+                pass
             cursor.execute("DELETE FROM checkups WHERE user_id = ?", (user_id,))
             conn.commit()
             return cursor.rowcount > 0
@@ -419,127 +461,99 @@ class UserDBService:
         return timeline
 
     # -------------------------------------------------------------------------
+    # COMPARISON STORAGE
+    # -------------------------------------------------------------------------
+    def save_comparison(
+        self,
+        user_id: str,
+        current_checkup_id: str,
+        prior_checkup_id: Optional[str],
+        result_dict: Dict[str, Any],
+        narrative_dict: Optional[Dict[str, Any]] = None,
+        narrative_source: str = "template",
+        llm_model: Optional[str] = None,
+    ) -> str:
+        """Upsert a comparison record (UNIQUE on current_checkup_id)."""
+        comp_id = f"cmp_{secrets.token_hex(8)}"
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                INSERT INTO comparisons
+                    (id, user_id, current_checkup_id, prior_checkup_id, result_json, narrative_json, narrative_source, llm_model)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(current_checkup_id) DO UPDATE SET
+                    result_json=excluded.result_json,
+                    narrative_json=excluded.narrative_json,
+                    narrative_source=excluded.narrative_source,
+                    llm_model=excluded.llm_model,
+                    created_at=CURRENT_TIMESTAMP
+                """, (
+                    comp_id, user_id, current_checkup_id, prior_checkup_id,
+                    json.dumps(result_dict),
+                    json.dumps(narrative_dict) if narrative_dict else None,
+                    narrative_source,
+                    llm_model,
+                ))
+                conn.commit()
+        except sqlite3.OperationalError as e:
+            logger.warning("save_comparison failed (table may not exist): %s", e)
+        return comp_id
+
+    def get_comparison_for_checkup(self, checkup_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieve stored comparison for a specific checkup."""
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT result_json, narrative_json, narrative_source, llm_model FROM comparisons WHERE current_checkup_id = ?",
+                    (checkup_id,)
+                )
+                row = cursor.fetchone()
+                if row:
+                    result = json.loads(row[0]) if row[0] else {}
+                    narrative = json.loads(row[1]) if row[1] else None
+                    return {
+                        "comparison": result,
+                        "narrative": narrative,
+                        "narrative_source": row[2],
+                        "llm_model": row[3],
+                    }
+        except sqlite3.OperationalError:
+            pass
+        return None
+
+    # -------------------------------------------------------------------------
     # LONGITUDINAL TRAJECTORY & VISIT-OVER-VISIT COMPARISON ENGINE
     # -------------------------------------------------------------------------
     def compute_longitudinal_comparison(self, user_id: str, current_checkup_id: Optional[str] = None) -> Dict[str, Any]:
         """
-        Compares the latest checkup with the previous checkup(s) strictly for this user.
-        Generates biomarker deltas, trajectory classification, and dynamic clinical evolution advice.
+        Returns a ComparisonResult dict for the latest (or specified) checkup.
+        Uses the new longitudinal_service engine for correctness.
+        Falls back to stored comparison if available.
         """
-        timeline = self.get_user_timeline(user_id=user_id, limit=5)
+        # Try to get stored comparison for the latest checkup first
+        timeline = self.get_user_timeline(user_id=user_id, limit=25)
+        if not timeline:
+            from backend.app.services.longitudinal_service import compute_comparison, _baseline_result
+            return _baseline_result(None, 0).model_dump()
 
-        if len(timeline) < 2:
-            return {
-                "has_prior_history": False,
-                "message": "This is your initial recorded checkup. Baseline metrics established for future visit-over-visit trajectory tracking.",
-                "deltas": [],
-                "trajectory_status": "BASELINE_ESTABLISHED",
-                "days_since_prior": 0
-            }
+        current = timeline[0] if not current_checkup_id else next(
+            (v for v in timeline if v["id"] == current_checkup_id), timeline[0]
+        )
 
-        latest = timeline[0]
-        prior = timeline[1]
+        stored = self.get_comparison_for_checkup(current["id"])
+        if stored and stored.get("comparison"):
+            result = stored["comparison"]
+            result["_narrative"] = stored.get("narrative")
+            result["_narrative_source"] = stored.get("narrative_source", "template")
+            result["_llm_model"] = stored.get("llm_model")
+            result["total_visits_recorded"] = len(timeline)
+            return result
 
-        # Calculate time difference
-        try:
-            t_latest = datetime.fromisoformat(latest["created_at"].replace("Z", "+00:00").split(".")[0])
-            t_prior = datetime.fromisoformat(prior["created_at"].replace("Z", "+00:00").split(".")[0])
-            days_diff = max(1, (t_latest - t_prior).days)
-        except Exception:
-            days_diff = 30  # Default nominal span
-
-        deltas = []
-        concerning_shifts = 0
-        improving_shifts = 0
-
-        # Compare Risk Score
-        score_diff = latest["risk_score"] - prior["risk_score"]
-        if abs(score_diff) > 0.5:
-            direction = "INCREASED" if score_diff > 0 else "DECREASED"
-            impact = "concerning" if score_diff > 3.0 else ("improving" if score_diff < -3.0 else "neutral")
-            if impact == "concerning":
-                concerning_shifts += 1
-            elif impact == "improving":
-                improving_shifts += 1
-
-            deltas.append({
-                "biomarker": "Overall Health Risk Score",
-                "prior_value": f"{prior['risk_score']:.1f}/100",
-                "current_value": f"{latest['risk_score']:.1f}/100",
-                "delta": f"{'+' if score_diff > 0 else ''}{score_diff:.1f}",
-                "unit": "pts",
-                "impact": impact,
-                "direction": direction
-            })
-
-        # Compare Specific Biomarkers
-        cur_bio = latest.get("biomarkers", {})
-        pri_bio = prior.get("biomarkers", {})
-
-        biomarker_specs = [
-            ("glucose", "Fasting Blood Glucose", "mg/dL", 100, 125, True),
-            ("cholesterol", "Total Cholesterol", "mg/dL", 200, 240, True),
-            ("trestbps", "Systolic Blood Pressure", "mmHg", 120, 140, True),
-            ("creatinine", "Serum Creatinine", "mg/dL", 1.2, 1.5, True),
-            ("bmi", "Body Mass Index (BMI)", "kg/m²", 25.0, 30.0, True),
-            ("hba1c", "Hemoglobin A1c", "%", 5.7, 6.4, True)
-        ]
-
-        for key, label, unit, normal_max, high_thresh, higher_is_worse in biomarker_specs:
-            if key in cur_bio and key in pri_bio:
-                try:
-                    v_cur = float(cur_bio[key])
-                    v_pri = float(pri_bio[key])
-                    diff = v_cur - v_pri
-                    if abs(diff) > 0.05:
-                        is_worse = (diff > 0) if higher_is_worse else (diff < 0)
-                        impact = "concerning" if (is_worse and abs(diff) > 3.0) else ("improving" if (not is_worse and abs(diff) > 3.0) else "neutral")
-                        if impact == "concerning":
-                            concerning_shifts += 1
-                        elif impact == "improving":
-                            improving_shifts += 1
-
-                        deltas.append({
-                            "biomarker": label,
-                            "prior_value": f"{v_pri:.1f}",
-                            "current_value": f"{v_cur:.1f}",
-                            "delta": f"{'+' if diff > 0 else ''}{diff:.1f}",
-                            "unit": unit,
-                            "impact": impact,
-                            "direction": "INCREASED" if diff > 0 else "DECREASED"
-                        })
-                except Exception:
-                    pass
-
-        # Trajectory synthesis
-        if concerning_shifts > improving_shifts:
-            status = "ATTENTION_REQUIRED"
-            summary_advice = (
-                f"Longitudinal Review ({days_diff} days since prior checkup): Risk parameters show progressive upward drift. "
-                "Biomarker deviations indicate accelerated cardiometabolic strain. Close clinical follow-up and targeted preventive interventions recommended."
-            )
-        elif improving_shifts > concerning_shifts:
-            status = "FAVORABLE_TRAJECTORY"
-            summary_advice = (
-                f"Longitudinal Review ({days_diff} days since prior checkup): Demonstrating positive therapeutic/lifestyle response! "
-                "Key metabolic and cardiovascular risk markers reflect measurable reduction compared to your previous evaluation."
-            )
-        else:
-            status = "STABLE_MAINTENANCE"
-            summary_advice = (
-                f"Longitudinal Review ({days_diff} days since prior checkup): Health metrics remain broadly stable compared to your baseline visit. "
-                "Maintain ongoing preventive regimen and routine periodic surveillance."
-            )
-
-        return {
-            "has_prior_history": True,
-            "trajectory_status": status,
-            "days_since_prior": days_diff,
-            "prior_checkup_title": prior["title"],
-            "prior_checkup_date": prior["created_at"],
-            "summary_advice": summary_advice,
-            "deltas": deltas,
-            "total_visits_recorded": len(timeline)
-        }
+        # Compute on-the-fly using new engine
+        from backend.app.services.longitudinal_service import compute_comparison
+        result = compute_comparison(user_id, timeline, current_checkup_id)
+        return result.model_dump()
 
 user_db = UserDBService()

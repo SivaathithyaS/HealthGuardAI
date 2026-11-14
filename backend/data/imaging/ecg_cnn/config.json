@@ -10,7 +10,7 @@
     500
   ],
   "weights_file": "weights.pt",
-  "weights_sha256": "d14463500150900fe2776c4eb9f70f6fdbf7556d2f27b92ed7b26026ab4cdfb7",
+  "weights_sha256": "bb51d7f2457c27347599e1ff8f5cf4cfc9027577f73232fde2ea36b7e2083a78",
   "labels": [
     "Normal Sinus Rhythm",
     "Myocardial Infarction",

@@ -37,7 +37,29 @@ Two accounts are auto-created on first launch — no registration needed:
 Each user has a **completely isolated** health history tab (`My Health History`) that shows:
 - All past checkup results with expandable details (findings, recommendations, risk score)
 - **Longitudinal trajectory analysis** — visit-over-visit biomarker delta comparison
-- Trajectory classification: `FAVORABLE_TRAJECTORY` / `STABLE_MAINTENANCE` / `ATTENTION_REQUIRED`
+- Trajectory classification: `FAVORABLE_TRAJECTORY` / `STABLE_MAINTENANCE` / `ATTENTION_REQUIRED` / `MIXED`
+- **LLM-narrated explanations** (Groq Llama 3.3 70B) with improved/worsened/unchanged groups, caveats, and a clinician-recommendation disclaimer
+
+### Visit-Over-Visit Comparison + LLM Narration
+
+HealthGuard AI automatically compares each new check-up with the most recent *comparable* prior visit (same modality + overlapping biomarkers), runs a deterministic structured comparison, then optionally narrates the result via Groq Llama 3.3 70B.
+
+**Groq LLM Setup (Optional):**
+```bash
+# In .env:
+GROQ_API_KEY=gsk_...            # get free key at https://console.groq.com/
+GROQ_MODEL=llama-3.3-70b-versatile
+LLM_NARRATION_ENABLED=true      # set to false to use deterministic template only
+```
+
+Without `GROQ_API_KEY`, the system uses a deterministic template narrator that is always correct (no hallucinations). The LLM adds natural-language narration only; the engine's classification is always deterministic.
+
+**Biomarker canonicalization** handles all key variants from real extracted reports: `fasting_plasma_glucose`, `glycated_hemoglobin_(hba1c)`, `serum_creatinine_(preserved)`, `ldl_cholesterol_(atherogenic)`, `blood_pressure_(single_reading)`, and many more.
+
+**Safety features:**
+- LLM output is validated (hallucinated numbers, drug names, wrong placement rejected)
+- Falls back to template narrator on any validation error or network failure
+- Max 20 LLM calls per user per day, max 2 concurrent
 
 ### Email OTP Setup (Optional)
 Copy `.env.example` to `.env` and fill in your Gmail App Password:

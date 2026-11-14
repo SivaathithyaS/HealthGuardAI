@@ -32,6 +32,15 @@
 | 2 | notumor | No Tumor Detected |
 | 3 | pituitary | Pituitary Adenoma |
 
+## Explainability — Real Grad-CAM
+Grad-CAM is computed on the last conv layer of DenseBlock4:
+`model.features.denseblock4.denselayer16.conv2`
+
+The activation map (7×7) is upsampled to 224×224 with bilinear interpolation,
+normalised to [0, 1], and rendered as a jet-colormap overlay on the input slice.
+Inplace ReLUs in DenseNet are handled by using `torch.autograd.grad` on the
+retained activation tensor (rather than gradient hooks on parameters).
+
 ## Known Limitations & Bias
 - **Source-domain bias**: The `notumor` class images are from a different scanner
   than the tumor classes. Run `domain_bias_report.json` to check brightness shift.
@@ -41,4 +50,4 @@
 - **Not clinically validated**: Do not use for real clinical decisions.
 
 ## SHA-256
-`69768b6c01bb617196044b1fdc82781e6afac35456cc78979b3923ca7921b24d`
+`ee5dae2ca2ef0baab40a6afec5569d295c7fecd6f1f4c68cfddb105b5357e343`

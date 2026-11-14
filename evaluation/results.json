@@ -1,0 +1,347 @@
+{
+  "run_at": "2026-11-13T15:15:22.906348",
+  "llm_enabled": false,
+  "engine_summary": {
+    "total_cases": 30,
+    "trajectory_accuracy": 1.0,
+    "case_level_accuracy": 1.0,
+    "biomarker_level_accuracy": 1.0
+  },
+  "narrator_summary": {},
+  "engine_per_case": [
+    {
+      "case_id": 1,
+      "description": "Single HbA1c improvement (8.2 -> 6.9)",
+      "trajectory_ok": true,
+      "bio_results": {
+        "hba1c": true
+      },
+      "all_bio_correct": true,
+      "computed_trajectory": "FAVORABLE_TRAJECTORY",
+      "expected_trajectory": "FAVORABLE_TRAJECTORY"
+    },
+    {
+      "case_id": 2,
+      "description": "Single creatinine worsening (1.2 -> 2.4)",
+      "trajectory_ok": true,
+      "bio_results": {
+        "creatinine": true
+      },
+      "all_bio_correct": true,
+      "computed_trajectory": "ATTENTION_REQUIRED",
+      "expected_trajectory": "ATTENTION_REQUIRED"
+    },
+    {
+      "case_id": 3,
+      "description": "Mixed: LDL improved, BP worsened",
+      "trajectory_ok": true,
+      "bio_results": {
+        "ldl": true,
+        "systolic_bp": true
+      },
+      "all_bio_correct": true,
+      "computed_trajectory": "MIXED",
+      "expected_trajectory": "MIXED"
+    },
+    {
+      "case_id": 4,
+      "description": "No change (glucose 90 -> 95)",
+      "trajectory_ok": true,
+      "bio_results": {
+        "fasting_glucose": true
+      },
+      "all_bio_correct": true,
+      "computed_trajectory": "STABLE_MAINTENANCE",
+      "expected_trajectory": "STABLE_MAINTENANCE"
+    },
+    {
+      "case_id": 5,
+      "description": "Tiny noise (BMI 28.5 -> 28.6)",
+      "trajectory_ok": true,
+      "bio_results": {
+        "bmi": true
+      },
+      "all_bio_correct": true,
+      "computed_trajectory": "STABLE_MAINTENANCE",
+      "expected_trajectory": "STABLE_MAINTENANCE"
+    },
+    {
+      "case_id": 6,
+      "description": "Missing biomarker in one visit",
+      "trajectory_ok": true,
+      "bio_results": {},
+      "all_bio_correct": true,
+      "computed_trajectory": "NOT_COMPARABLE",
+      "expected_trajectory": "NOT_COMPARABLE"
+    },
+    {
+      "case_id": 7,
+      "description": "Unit mismatch: glucose in mmol/L prior, mg/dL current",
+      "trajectory_ok": true,
+      "bio_results": {
+        "fasting_glucose": true
+      },
+      "all_bio_correct": true,
+      "computed_trajectory": "FAVORABLE_TRAJECTORY",
+      "expected_trajectory": "FAVORABLE_TRAJECTORY"
+    },
+    {
+      "case_id": 8,
+      "description": "Mismatched modality -> NOT_COMPARABLE",
+      "trajectory_ok": true,
+      "bio_results": {},
+      "all_bio_correct": true,
+      "computed_trajectory": "NOT_COMPARABLE",
+      "expected_trajectory": "NOT_COMPARABLE"
+    },
+    {
+      "case_id": 9,
+      "description": "Censored values skipped",
+      "trajectory_ok": true,
+      "bio_results": {
+        "ferritin": true
+      },
+      "all_bio_correct": true,
+      "computed_trajectory": "STABLE_MAINTENANCE",
+      "expected_trajectory": "STABLE_MAINTENANCE"
+    },
+    {
+      "case_id": 10,
+      "description": "3-visit trend: HbA1c declining",
+      "trajectory_ok": true,
+      "bio_results": {
+        "hba1c": true
+      },
+      "all_bio_correct": true,
+      "computed_trajectory": "FAVORABLE_TRAJECTORY",
+      "expected_trajectory": "FAVORABLE_TRAJECTORY"
+    },
+    {
+      "case_id": 11,
+      "description": "Total cholesterol improved (240 -> 198)",
+      "trajectory_ok": true,
+      "bio_results": {
+        "total_cholesterol": true
+      },
+      "all_bio_correct": true,
+      "computed_trajectory": "FAVORABLE_TRAJECTORY",
+      "expected_trajectory": "FAVORABLE_TRAJECTORY"
+    },
+    {
+      "case_id": 12,
+      "description": "Total cholesterol worsened (195 -> 245)",
+      "trajectory_ok": true,
+      "bio_results": {
+        "total_cholesterol": true
+      },
+      "all_bio_correct": true,
+      "computed_trajectory": "ATTENTION_REQUIRED",
+      "expected_trajectory": "ATTENTION_REQUIRED"
+    },
+    {
+      "case_id": 13,
+      "description": "HDL improved (35 -> 55)",
+      "trajectory_ok": true,
+      "bio_results": {
+        "hdl": true
+      },
+      "all_bio_correct": true,
+      "computed_trajectory": "FAVORABLE_TRAJECTORY",
+      "expected_trajectory": "FAVORABLE_TRAJECTORY"
+    },
+    {
+      "case_id": 14,
+      "description": "HDL worsened (55 -> 35)",
+      "trajectory_ok": true,
+      "bio_results": {
+        "hdl": true
+      },
+      "all_bio_correct": true,
+      "computed_trajectory": "ATTENTION_REQUIRED",
+      "expected_trajectory": "ATTENTION_REQUIRED"
+    },
+    {
+      "case_id": 15,
+      "description": "BP both improved systolic+diastolic",
+      "trajectory_ok": true,
+      "bio_results": {
+        "systolic_bp": true,
+        "diastolic_bp": true
+      },
+      "all_bio_correct": true,
+      "computed_trajectory": "FAVORABLE_TRAJECTORY",
+      "expected_trajectory": "FAVORABLE_TRAJECTORY"
+    },
+    {
+      "case_id": 16,
+      "description": "Hemoglobin improved (8.4 -> 11.2)",
+      "trajectory_ok": true,
+      "bio_results": {
+        "hemoglobin": true
+      },
+      "all_bio_correct": true,
+      "computed_trajectory": "FAVORABLE_TRAJECTORY",
+      "expected_trajectory": "FAVORABLE_TRAJECTORY"
+    },
+    {
+      "case_id": 17,
+      "description": "Hemoglobin worsened (12.0 -> 9.5)",
+      "trajectory_ok": true,
+      "bio_results": {
+        "hemoglobin": true
+      },
+      "all_bio_correct": true,
+      "computed_trajectory": "ATTENTION_REQUIRED",
+      "expected_trajectory": "ATTENTION_REQUIRED"
+    },
+    {
+      "case_id": 18,
+      "description": "BMI improved (32 -> 29)",
+      "trajectory_ok": true,
+      "bio_results": {
+        "bmi": true
+      },
+      "all_bio_correct": true,
+      "computed_trajectory": "FAVORABLE_TRAJECTORY",
+      "expected_trajectory": "FAVORABLE_TRAJECTORY"
+    },
+    {
+      "case_id": 19,
+      "description": "BMI worsened (25 -> 30)",
+      "trajectory_ok": true,
+      "bio_results": {
+        "bmi": true
+      },
+      "all_bio_correct": true,
+      "computed_trajectory": "ATTENTION_REQUIRED",
+      "expected_trajectory": "ATTENTION_REQUIRED"
+    },
+    {
+      "case_id": 20,
+      "description": "eGFR worsened (75 -> 48)",
+      "trajectory_ok": true,
+      "bio_results": {
+        "egfr": true
+      },
+      "all_bio_correct": true,
+      "computed_trajectory": "ATTENTION_REQUIRED",
+      "expected_trajectory": "ATTENTION_REQUIRED"
+    },
+    {
+      "case_id": 21,
+      "description": "eGFR improved (45 -> 65)",
+      "trajectory_ok": true,
+      "bio_results": {
+        "egfr": true
+      },
+      "all_bio_correct": true,
+      "computed_trajectory": "FAVORABLE_TRAJECTORY",
+      "expected_trajectory": "FAVORABLE_TRAJECTORY"
+    },
+    {
+      "case_id": 22,
+      "description": "Triglycerides improved (220 -> 148)",
+      "trajectory_ok": true,
+      "bio_results": {
+        "triglycerides": true
+      },
+      "all_bio_correct": true,
+      "computed_trajectory": "FAVORABLE_TRAJECTORY",
+      "expected_trajectory": "FAVORABLE_TRAJECTORY"
+    },
+    {
+      "case_id": 23,
+      "description": "Triglycerides worsened (140 -> 230)",
+      "trajectory_ok": true,
+      "bio_results": {
+        "triglycerides": true
+      },
+      "all_bio_correct": true,
+      "computed_trajectory": "ATTENTION_REQUIRED",
+      "expected_trajectory": "ATTENTION_REQUIRED"
+    },
+    {
+      "case_id": 24,
+      "description": "MCV changed within normal range (85 -> 92)",
+      "trajectory_ok": true,
+      "bio_results": {
+        "mcv": true
+      },
+      "all_bio_correct": true,
+      "computed_trajectory": "STABLE_MAINTENANCE",
+      "expected_trajectory": "STABLE_MAINTENANCE"
+    },
+    {
+      "case_id": 25,
+      "description": "Ferritin improved (8 -> 45)",
+      "trajectory_ok": true,
+      "bio_results": {
+        "ferritin": true
+      },
+      "all_bio_correct": true,
+      "computed_trajectory": "FAVORABLE_TRAJECTORY",
+      "expected_trajectory": "FAVORABLE_TRAJECTORY"
+    },
+    {
+      "case_id": 26,
+      "description": "Creatinine stable within range (0.8 -> 1.0)",
+      "trajectory_ok": true,
+      "bio_results": {
+        "creatinine": true
+      },
+      "all_bio_correct": true,
+      "computed_trajectory": "STABLE_MAINTENANCE",
+      "expected_trajectory": "STABLE_MAINTENANCE"
+    },
+    {
+      "case_id": 27,
+      "description": "All improved: full cardiometabolic panel",
+      "trajectory_ok": true,
+      "bio_results": {
+        "hba1c": true,
+        "ldl": true,
+        "systolic_bp": true,
+        "total_cholesterol": true
+      },
+      "all_bio_correct": true,
+      "computed_trajectory": "FAVORABLE_TRAJECTORY",
+      "expected_trajectory": "FAVORABLE_TRAJECTORY"
+    },
+    {
+      "case_id": 28,
+      "description": "All worsened: multi-biomarker decline",
+      "trajectory_ok": true,
+      "bio_results": {
+        "hba1c": true,
+        "ldl": true,
+        "systolic_bp": true
+      },
+      "all_bio_correct": true,
+      "computed_trajectory": "ATTENTION_REQUIRED",
+      "expected_trajectory": "ATTENTION_REQUIRED"
+    },
+    {
+      "case_id": 29,
+      "description": "Title mismatch but 2+ overlapping biomarkers -> COMPARED",
+      "trajectory_ok": true,
+      "bio_results": {
+        "hba1c": true,
+        "ldl": true,
+        "systolic_bp": true
+      },
+      "all_bio_correct": true,
+      "computed_trajectory": "FAVORABLE_TRAJECTORY",
+      "expected_trajectory": "FAVORABLE_TRAJECTORY"
+    },
+    {
+      "case_id": 30,
+      "description": "Only 1 overlapping biomarker, title differs -> NOT_COMPARABLE",
+      "trajectory_ok": true,
+      "bio_results": {},
+      "all_bio_correct": true,
+      "computed_trajectory": "NOT_COMPARABLE",
+      "expected_trajectory": "NOT_COMPARABLE"
+    }
+  ],
+  "narrator_per_case": []
+}

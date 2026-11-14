@@ -11,7 +11,7 @@
     224
   ],
   "weights_file": "weights.pt",
-  "weights_sha256": "69768b6c01bb617196044b1fdc82781e6afac35456cc78979b3923ca7921b24d",
+  "weights_sha256": "ee5dae2ca2ef0baab40a6afec5569d295c7fecd6f1f4c68cfddb105b5357e343",
   "labels": [
     "Glioma / High-Grade Neoplasm",
     "Meningioma",

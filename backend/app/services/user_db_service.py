@@ -122,27 +122,7 @@ class UserDBService:
             return False
 
     def _seed_default_accounts(self):
-        # Default clinician demo account
-        clinician_email = "clinician@healthguard.ai"
-        if not self.get_user_by_email(clinician_email):
-            self.create_user(
-                email=clinician_email,
-                name="Dr. Sarah Lin, MD",
-                password="Password123!",
-                role="Clinician"
-            )
-
-        # Demo patient account — shown in README for quick testing
-        demo_email = "test@gmail.com"
-        if not self.get_user_by_email(demo_email):
-            self.create_user(
-                email=demo_email,
-                name="test1",
-                password="test",
-                role="Patient"
-            )
-
-        # Accounts start blank so users only see their own scanned/uploaded reports
+        # No demo accounts are seeded; accounts start completely blank
         pass
 
     def _seed_sample_checkups(self, user_id: str):
@@ -267,8 +247,7 @@ class UserDBService:
         if not user:
             return None
         
-        # Verify hash or allow master demo fallback password
-        if self._verify_password(password, user["password_hash"]) or password == "demo123" or password == "Password123!":
+        if self._verify_password(password, user["password_hash"]):
             return {
                 "id": user["id"],
                 "email": user["email"],
@@ -318,15 +297,6 @@ class UserDBService:
         """Returns the authenticated user dict if token is valid and active."""
         if not token:
             return None
-        # Support demo tokens so quick clinician demo has full access to history & features
-        if token == "demo-clinician-session":
-            clinician = self.get_user_by_email("clinician@healthguard.ai")
-            if clinician:
-                return clinician
-        if token == "demo-patient-session":
-            patient = self.get_user_by_email("test@gmail.com")
-            if patient:
-                return patient
 
         with self._get_connection() as conn:
             cursor = conn.cursor()

@@ -28,10 +28,15 @@ export default function AuthGate() {
         }
 
         setHydrating(true);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+
         fetch(`${API_BASE}/api/auth/me`, {
-            headers: { Authorization: `Bearer ${token}` }
+            headers: { Authorization: `Bearer ${token}` },
+            signal: controller.signal
         })
             .then(res => {
+                clearTimeout(timeoutId);
                 if (!res.ok) throw new Error('invalid');
                 return res.json();
             })
@@ -40,6 +45,7 @@ export default function AuthGate() {
                 setHydrating(false);
             })
             .catch(() => {
+                clearTimeout(timeoutId);
                 // Token invalid or server offline — clear it
                 sessionStorage.removeItem('healthguard_access_token');
                 setToken(null);

@@ -14,6 +14,7 @@ import OverrideModal from './components/OverrideModal';
 import ImagingView from './components/ImagingView';
 import HealthHistory from './components/HealthHistory';
 import PresetCasesView from './components/PresetCasesView';
+import PatientMismatchModal from './components/PatientMismatchModal';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -40,6 +41,31 @@ export default function App({ user = null, token = null, onSignOut = null }) {
   const [rubricModalData, setRubricModalData] = useState(null);
   const [auditLogModalOpen, setAuditLogModalOpen] = useState(false);
   const [overrideModalData, setOverrideModalData] = useState(null);
+  const [patientMismatchData, setPatientMismatchData] = useState(null);
+
+  const handleCreateAccountForPatient = (patientName) => {
+    setPatientMismatchData(null);
+    handleClearScanResult();
+    sessionStorage.setItem('healthguard_auth_prefill', JSON.stringify({
+      mode: 'register',
+      name: patientName
+    }));
+    if (onSignOut) {
+      onSignOut();
+    }
+  };
+
+  const handleSwitchAccountForPatient = (patientName) => {
+    setPatientMismatchData(null);
+    handleClearScanResult();
+    sessionStorage.setItem('healthguard_auth_prefill', JSON.stringify({
+      mode: 'signin',
+      name: patientName
+    }));
+    if (onSignOut) {
+      onSignOut();
+    }
+  };
 
   // Account Menu State
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
@@ -276,7 +302,16 @@ export default function App({ user = null, token = null, onSignOut = null }) {
       });
 
       if (!res.ok) {
-        const err = await res.json();
+        const err = await res.json().catch(() => ({}));
+        if (res.status === 403 || err?.detail?.error === 'PATIENT_NAME_MISMATCH' || err?.error === 'PATIENT_NAME_MISMATCH') {
+          const detail = err?.detail || err;
+          setPatientMismatchData({
+            patientName: detail?.patient_name || 'Another Individual',
+            currentUserName: user?.name || 'Current User'
+          });
+          setPipelineStage('IDLE');
+          return;
+        }
         throw new Error(err.detail || 'Diagnostic analysis failed.');
       }
       const data = await res.json();
@@ -335,7 +370,18 @@ export default function App({ user = null, token = null, onSignOut = null }) {
       });
 
       if (!res.ok) {
-        const err = await res.json();
+        const err = await res.json().catch(() => ({}));
+        if (res.status === 403 || err?.detail?.error === 'PATIENT_NAME_MISMATCH' || err?.error === 'PATIENT_NAME_MISMATCH') {
+          const detail = err?.detail || err;
+          setPatientMismatchData({
+            patientName: detail?.patient_name || 'Another Individual',
+            currentUserName: user?.name || 'Current User'
+          });
+          setSelectedFile(null);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+          setPipelineStage('IDLE');
+          return;
+        }
         throw new Error(err.detail || 'File ingestion failed.');
       }
       const data = await res.json();
@@ -459,10 +505,10 @@ export default function App({ user = null, token = null, onSignOut = null }) {
             type="button"
             className={`sidebar-nav-item ${activeTab === 'universal' ? 'active' : ''}`}
             onClick={() => setActiveTab('universal')}
-            title="Universal Scanner"
+            title="Report Scanner"
           >
             <FileText size={16} strokeWidth={1.5} />
-            <span>Universal Scanner</span>
+            <span>Report Scanner</span>
           </button>
 
           <button 
@@ -552,7 +598,7 @@ export default function App({ user = null, token = null, onSignOut = null }) {
 
             <div>
               <h1 className="navbar-page-title">
-                {activeTab === 'universal' && 'Universal Report Scanner & Prevention'}
+                {activeTab === 'universal' && 'Report Scanner & Prevention'}
                 {activeTab === 'imaging' && 'Clinical Imaging & Waveforms'}
                 {activeTab === 'presets' && 'Pre-configured Clinical Cases'}
                 {activeTab === 'heart' && 'Cardiology Risk Assessment'}
@@ -1713,6 +1759,15 @@ export default function App({ user = null, token = null, onSignOut = null }) {
         onClose={() => setOverrideModalData(null)} 
         data={overrideModalData}
         onSubmitFeedback={handleCommitFeedback}
+      />
+
+      <PatientMismatchModal
+        isOpen={!!patientMismatchData}
+        onClose={() => setPatientMismatchData(null)}
+        patientName={patientMismatchData?.patientName}
+        currentUserName={patientMismatchData?.currentUserName}
+        onCreateAccount={handleCreateAccountForPatient}
+        onSwitchAccount={handleSwitchAccountForPatient}
       />
     </div>
   );

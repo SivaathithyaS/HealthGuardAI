@@ -191,7 +191,6 @@ function NarrativePanel({ narrative, checkupId, token, onRegenerate }) {
                       background: 'rgba(16,185,129,0.08)', borderLeft: '2px solid #10b981',
                       padding: '4px 8px', borderRadius: '0 4px 4px 0', lineHeight: 1.5
                     }}>
-                      <span style={{ fontWeight: 600, color: '#10b981' }}>Health Impact: </span>
                       {b.clinical_significance}
                     </div>
                   )}
@@ -230,7 +229,6 @@ function NarrativePanel({ narrative, checkupId, token, onRegenerate }) {
                       background: 'rgba(239,68,68,0.08)', borderLeft: '2px solid #ef4444',
                       padding: '4px 8px', borderRadius: '0 4px 4px 0', lineHeight: 1.5
                     }}>
-                      <span style={{ fontWeight: 600, color: '#ef4444' }}>Health Impact: </span>
                       {b.clinical_significance}
                     </div>
                   )}
@@ -269,7 +267,6 @@ function NarrativePanel({ narrative, checkupId, token, onRegenerate }) {
                       background: 'rgba(148,163,184,0.08)', borderLeft: '2px solid #94a3b8',
                       padding: '4px 8px', borderRadius: '0 4px 4px 0', lineHeight: 1.5
                     }}>
-                      <span style={{ fontWeight: 600, color: '#94a3b8' }}>Health Impact: </span>
                       {b.clinical_significance}
                     </div>
                   )}
@@ -301,6 +298,42 @@ function NarrativePanel({ narrative, checkupId, token, onRegenerate }) {
                 <span>{c}</span>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Overall Current Health Condition Assessment */}
+        {narrative.overall_assessment && (
+          <div style={{
+            marginTop: '12px', padding: '10px 14px', borderRadius: '8px',
+            background: 'var(--bg-subtle, rgba(255,255,255,0.03))',
+            border: '1px solid var(--border-default, #E3E6E2)',
+            fontSize: '12.5px', lineHeight: 1.55, color: 'var(--text-primary)'
+          }}>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.07em', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Activity size={12} color="#0284c7" />
+              OVERALL HEALTH ASSESSMENT
+            </div>
+            <div>{narrative.overall_assessment}</div>
+          </div>
+        )}
+
+        {/* Practical Health Tips to Improve */}
+        {narrative.health_tips && narrative.health_tips.length > 0 && (
+          <div style={{
+            marginTop: '10px', padding: '10px 14px', borderRadius: '8px',
+            background: 'rgba(16, 185, 129, 0.04)',
+            border: '1px solid rgba(16, 185, 129, 0.15)',
+            fontSize: '12.5px', lineHeight: 1.55
+          }}>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: '#10b981', letterSpacing: '0.07em', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Sparkles size={12} color="#10b981" />
+              TIPS TO IMPROVE & MAINTAIN HEALTH
+            </div>
+            <ul style={{ margin: 0, paddingLeft: '18px', display: 'flex', flexDirection: 'column', gap: '4px', color: 'var(--text-secondary)' }}>
+              {narrative.health_tips.map((tip, idx) => (
+                <li key={idx} style={{ fontSize: '12px' }}>{tip}</li>
+              ))}
+            </ul>
           </div>
         )}
       </div>
@@ -569,15 +602,6 @@ function LongitudinalPanel({ data, narrative, checkupId, token, onRegenerate }) 
         <p style={{ padding: '12px 18px', fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6, margin: 0 }}>
           {data.summary_advice}
         </p>
-      )}
-
-      {data.deltas && data.deltas.length > 0 && (
-        <div style={{ padding: '0 18px 18px 18px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.08em', marginBottom: '4px' }}>
-            VISIT-OVER-VISIT BIOMARKER CHANGES
-          </div>
-          {data.deltas.map((d, i) => <DeltaBadge key={i} delta={d} />)}
-        </div>
       )}
     </div>
   );

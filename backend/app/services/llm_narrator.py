@@ -141,10 +141,13 @@ RULES — read carefully:
 7. End the summary by recommending discussion with a clinician.
 8. Each biomarker must appear in the correct group matching its "assessment" field (improved/worsened/unchanged/changed_within_range/changed_unclear).
 9. Never hallucinate biomarker names not in the input.
-10. ALWAYS include all 6 top-level keys in the JSON output, using empty arrays [] if none apply: "headline", "improved", "worsened", "unchanged", "summary", "caveats".
+10. ALWAYS include all 8 top-level keys in the JSON output, using empty arrays [] or strings "" if none apply: "headline", "improved", "worsened", "unchanged", "summary", "overall_assessment", "health_tips", "caveats".
 11. CLINICAL SIGNIFICANCE: For each biomarker in improved, worsened, and unchanged, provide BOTH:
     - "note": A concise 1-sentence summary of the exact change (e.g. "Decreased by 46 mg/dL moving into target range.").
-    - "clinical_significance": A clear 1-2 sentence explanation of what this biomarker does and what this change actually means for the patient's body (e.g., why a drop in sugar/cholesterol is good for blood vessels and heart, or why a rise in creatinine/blood pressure stresses the kidneys and cardiovascular system).
+    - "clinical_significance": A clear 1-2 sentence explanation starting directly with what this biomarker does and what this change actually means for the patient's body (e.g., why a drop in sugar/cholesterol is good for blood vessels and heart, or why a rise in creatinine/blood pressure stresses the kidneys and cardiovascular system).
+12. OVERALL CONDITION & HEALTH TIPS:
+    - "overall_assessment": A 1-2 sentence evaluation of the patient's current overall health condition, clearly describing how much it has developed (improved) or worsened between visits.
+    - "health_tips": An array of 2-3 practical, evidence-based lifestyle/preventive tips (nutrition, activity, sleep, hydration, monitoring) to support health improvement based on the specific metrics observed.
 
 REQUIRED JSON OUTPUT FORMAT (strict, no extra keys):
 {
@@ -180,6 +183,12 @@ REQUIRED JSON OUTPUT FORMAT (strict, no extra keys):
     }
   ],
   "summary": "<2-4 sentences covering what improved, what worsened, why these changes matter for the body, and recommending clinician consultation>",
+  "overall_assessment": "<1-2 sentences giving an overall idea of the patient's current health condition and how much it developed or worsened>",
+  "health_tips": [
+    "<practical lifestyle or preventive tip 1>",
+    "<practical lifestyle or preventive tip 2>",
+    "<practical lifestyle or preventive tip 3>"
+  ],
   "caveats": ["<caveat 1>", "<caveat 2>"]
 }
 """.strip()
@@ -281,10 +290,12 @@ def validate_narrative(narrative: dict, result: dict) -> List[str]:
     """
     errors = []
 
-    # Default empty arrays if omitted
-    for k in ("improved", "worsened", "unchanged", "caveats"):
+    # Default empty arrays or strings if omitted
+    for k in ("improved", "worsened", "unchanged", "caveats", "health_tips"):
         if k not in narrative or narrative[k] is None:
             narrative[k] = []
+    if "overall_assessment" not in narrative or narrative["overall_assessment"] is None:
+        narrative["overall_assessment"] = ""
 
     # Schema check
     required_keys = {"headline", "improved", "worsened", "unchanged", "summary", "caveats"}
@@ -303,7 +314,12 @@ def validate_narrative(narrative: dict, result: dict) -> List[str]:
         errors.append("Summary too long (>1200 chars)")
 
     # Drug / diagnosis phrases
-    for text_field in [summary] + narrative.get("caveats", []):
+    text_fields = (
+        [summary, narrative.get("overall_assessment", "")]
+        + narrative.get("caveats", [])
+        + narrative.get("health_tips", [])
+    )
+    for text_field in text_fields:
         if _FORBIDDEN_DRUG_PATTERN.search(str(text_field)):
             errors.append(f"Forbidden drug/treatment language in: {str(text_field)[:80]}")
         if _FORBIDDEN_DIAGNOSE_PATTERN.search(str(text_field)):
@@ -470,12 +486,46 @@ def template_narrator(result: dict) -> dict:
     if result.get("possible_duplicate"):
         caveats.append("This visit appears very similar to the prior one; values may be duplicate entries.")
 
+    # Overall condition idea (how much it developed or worsened)
+    if status == "BASELINE":
+        overall_assessment = "Baseline health assessment established; metrics provide a foundational benchmark for tracking your health trajectory over future visits."
+    elif status == "NOT_COMPARABLE":
+        overall_assessment = "Health metrics recorded for this clinical modality; regular longitudinal follow-ups will establish comparative development."
+    elif trajectory == "FAVORABLE_TRAJECTORY":
+        overall_assessment = f"Overall, your health condition shows significant positive development, with {n_improved} key metric(s) improving toward healthy targets over {days or 'recent'} days."
+    elif trajectory == "ATTENTION_REQUIRED":
+        overall_assessment = f"Overall, your health condition shows signs of increased strain, with {n_worsened} biomarker(s) worsening and indicating a need for proactive clinical adjustments."
+    elif trajectory == "MIXED":
+        overall_assessment = f"Overall, your health condition reflects mixed development: notable improvements in {n_improved} metric(s) are balanced by {n_worsened} area(s) showing upward strain that need attention."
+    else:
+        overall_assessment = f"Overall, your health condition has remained consistent and stable over {days or 'recent'} days, maintaining baseline equilibrium."
+
+    # Practical lifestyle tips
+    health_tips = []
+    bio_names_lower = " ".join(b.get("biomarker", "").lower() for b in (improved_list + worsened_list))
+    if any(k in bio_names_lower for k in ["glucose", "hba1c", "sugar"]):
+        health_tips.append("Focus on high-fiber foods, lean proteins, and consistent meal timing to support steady glucose regulation.")
+    if any(k in bio_names_lower for k in ["blood pressure", "systolic", "diastolic"]):
+        health_tips.append("Incorporate 20-30 minutes of daily aerobic movement and moderate sodium intake to support vascular elasticity.")
+    if any(k in bio_names_lower for k in ["cholesterol", "ldl", "lipid"]):
+        health_tips.append("Choose heart-healthy unsaturated fats (olive oil, avocados, nuts) and limit saturated fats to support optimal lipid clearance.")
+    if any(k in bio_names_lower for k in ["creatinine", "kidney", "renal"]):
+        health_tips.append("Maintain optimal daily hydration and avoid overuse of non-steroidal anti-inflammatory drugs (NSAIDs) to protect renal function.")
+    if not health_tips:
+        health_tips = [
+            "Maintain consistent daily hydration and aim for 7-8 hours of quality sleep to support cellular recovery.",
+            "Incorporate 150 minutes of moderate physical activity throughout the week for comprehensive cardiovascular support.",
+            "Schedule regular periodic follow-up screenings with your clinician to monitor your long-term health trajectory."
+        ]
+
     return {
         "headline": headline,
         "improved": improved_list,
         "worsened": worsened_list,
         "unchanged": unchanged_list,
         "summary": summary,
+        "overall_assessment": overall_assessment,
+        "health_tips": health_tips,
         "caveats": caveats,
         "narrative_source": "template",
         "llm_model": None,

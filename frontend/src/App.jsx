@@ -312,7 +312,8 @@ export default function App({ user = null, token = null, onSignOut = null }) {
           setPipelineStage('IDLE');
           return;
         }
-        throw new Error(err.detail || 'Diagnostic analysis failed.');
+        const msg = typeof err.detail === 'string' ? err.detail : (err.detail?.message || err.message || 'Diagnostic analysis failed.');
+        throw new Error(msg);
       }
       const data = await res.json();
       setAnalysisResult(data);
@@ -382,7 +383,8 @@ export default function App({ user = null, token = null, onSignOut = null }) {
           setPipelineStage('IDLE');
           return;
         }
-        throw new Error(err.detail || 'File ingestion failed.');
+        const msg = typeof err.detail === 'string' ? err.detail : (err.detail?.message || err.message || 'File ingestion failed.');
+        throw new Error(msg);
       }
       const data = await res.json();
       setAnalysisResult(data);

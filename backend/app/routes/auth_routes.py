@@ -264,8 +264,8 @@ def get_my_history(
             comparison = result.model_dump()
             narrative = template_narrator(comparison)
     else:
-        from backend.app.services.user_db_service import user_db as _udb
-        comparison = _udb.compute_longitudinal_comparison(user["id"])
+        comparison = None
+        narrative = None
 
     return {
         "user": {

@@ -904,14 +904,17 @@ def compute_comparison(
     )
 
 
-def _baseline_result(current: Optional[dict], total: int) -> ComparisonResult:
+def _baseline_result(current: Optional[Any], total: int) -> ComparisonResult:
+    current_id = current if isinstance(current, str) else (current.get("id") if isinstance(current, dict) else None)
+    modality = current.get("modality") if isinstance(current, dict) else None
+    condition = current.get("title") if isinstance(current, dict) else None
     return ComparisonResult(
         status="BASELINE",
-        current_id=current.get("id") if current else None,
+        current_id=current_id,
         prior_id=None,
         days_between=None,
-        modality=current.get("modality") if current else None,
-        condition=current.get("title") if current else None,
+        modality=modality,
+        condition=condition,
         risk_score=RiskScoreDelta(prior=None, current=None, delta=None, assessment="n/a"),
         biomarkers=[],
         counts=ComparisonCounts(),

@@ -73,11 +73,11 @@ if TORCH_AVAILABLE:
             self.layer1 = self._make_layer(32,  64, num_blocks=2, stride=1)
             self.layer2 = self._make_layer(64, 128, num_blocks=2, stride=2)
             self.layer3 = self._make_layer(128, 256, num_blocks=2, stride=2)
-            self.layer4 = self._make_layer(256, 512, num_blocks=2, stride=2)
+            self.layer4 = self._make_layer(256, 256, num_blocks=2, stride=2)
 
             self.global_pool = nn.AdaptiveAvgPool1d(1)
             self.dropout      = nn.Dropout(p=0.3)
-            self.classifier   = nn.Linear(512, num_classes)
+            self.classifier   = nn.Linear(256, num_classes)
 
         def _make_layer(self, in_ch, out_ch, num_blocks, stride):
             layers = [ResBlock1D(in_ch, out_ch, stride=stride)]

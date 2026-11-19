@@ -43,7 +43,25 @@ class ImagingCNNService:
             weights_path = os.path.join(bundle["bundle_path"], bundle.get("weights_file", "weights.pt"))
             if not os.path.exists(weights_path):
                 return None
-            model = torch.load(weights_path, map_location="cpu", weights_only=False)
+            loaded = torch.load(weights_path, map_location="cpu", weights_only=False)
+            if isinstance(loaded, torch.nn.Module):
+                model = loaded
+            elif isinstance(loaded, dict):
+                # State dict checkpoint
+                state_dict = loaded.get("state_dict", loaded)
+                num_classes = bundle.get("config", {}).get("num_classes", len(bundle.get("labels", [])))
+                if name == "mri_cnn":
+                    from backend.app.services.cnn_architectures import MRIDenseNet121
+                    model = MRIDenseNet121(num_classes=num_classes, pretrained=False)
+                elif name == "ecg_cnn":
+                    from backend.app.services.cnn_architectures import ECGResNet1D
+                    model = ECGResNet1D(num_classes=num_classes)
+                else:
+                    return None
+                model.load_state_dict(state_dict)
+            else:
+                return None
+
             model.eval()
             self.loaded_models[name] = model
             return model
@@ -322,10 +340,11 @@ class ImagingCNNService:
 
         if "stemi" in fname_lower or "elevation" in fname_lower:
             pred_profile = [
-                PredictionItem(label="ST Elevation / Ischemia", probability=0.94),
-                PredictionItem(label="Normal Sinus Rhythm", probability=0.03),
-                PredictionItem(label="Atrial Fibrillation", probability=0.02),
-                PredictionItem(label="Ventricular Tachycardia", probability=0.01)
+                PredictionItem(label="Myocardial Infarction", probability=0.92),
+                PredictionItem(label="ST/T-Wave Change", probability=0.04),
+                PredictionItem(label="Normal Sinus Rhythm", probability=0.02),
+                PredictionItem(label="Conduction Disturbance", probability=0.01),
+                PredictionItem(label="Cardiac Hypertrophy", probability=0.01)
             ]
             tier1 = "Lead II shows marked ST elevation (>2.5 mm above J-point) across successive cardiac cycles."
             tier2 = "High probability electrophysiologic correlate for Acute Transmural Myocardial Ischemia / Inferior STEMI."
@@ -333,10 +352,11 @@ class ImagingCNNService:
             saliency = self._generate_ecg_saliency(signal_samples, peak_zone="st_segment")
         elif "afib" in fname_lower or "fibrillation" in fname_lower:
             pred_profile = [
-                PredictionItem(label="Atrial Fibrillation", probability=0.91),
-                PredictionItem(label="Normal Sinus Rhythm", probability=0.05),
-                PredictionItem(label="Ventricular Tachycardia", probability=0.02),
-                PredictionItem(label="ST Elevation / Ischemia", probability=0.02)
+                PredictionItem(label="Conduction Disturbance", probability=0.88),
+                PredictionItem(label="ST/T-Wave Change", probability=0.05),
+                PredictionItem(label="Normal Sinus Rhythm", probability=0.04),
+                PredictionItem(label="Myocardial Infarction", probability=0.02),
+                PredictionItem(label="Cardiac Hypertrophy", probability=0.01)
             ]
             tier1 = "Lead II tracing reveals irregularly irregular R-R intervals with absent discrete P-waves and undulating fibrillatory baseline."
             tier2 = "Consistent with Atrial Fibrillation with Rapid Ventricular Response (ventricular rate ~118 bpm)."
@@ -344,22 +364,24 @@ class ImagingCNNService:
             saliency = self._generate_ecg_saliency(signal_samples, peak_zone="baseline")
         elif is_uncertain:
             pred_profile = [
-                PredictionItem(label="Atrial Fibrillation", probability=0.48),
-                PredictionItem(label="Normal Sinus Rhythm", probability=0.35),
-                PredictionItem(label="ST Elevation / Ischemia", probability=0.10),
-                PredictionItem(label="Ventricular Tachycardia", probability=0.07)
+                PredictionItem(label="Conduction Disturbance", probability=0.45),
+                PredictionItem(label="Normal Sinus Rhythm", probability=0.32),
+                PredictionItem(label="ST/T-Wave Change", probability=0.11),
+                PredictionItem(label="Myocardial Infarction", probability=0.07),
+                PredictionItem(label="Cardiac Hypertrophy", probability=0.05)
             ]
             tier1 = "Low signal-to-noise ratio in Lead II tracing with wandering baseline and ambiguous P-wave morphology."
-            tier2 = "Indeterminate rhythm classification: posterior probability (0.48) falls below validation threshold (0.60)."
+            tier2 = "Indeterminate rhythm classification: posterior probability (0.45) falls below validation threshold (0.60)."
             tier3 = "Recommend repeat 12-lead ECG with skin prep, electrode replacement, and clinician manual over-read."
             saliency = self._generate_ecg_saliency(signal_samples, peak_zone="diffuse")
         else:
             # Default Normal Sinus Rhythm
             pred_profile = [
-                PredictionItem(label="Normal Sinus Rhythm", probability=0.95),
-                PredictionItem(label="Atrial Fibrillation", probability=0.02),
-                PredictionItem(label="ST Elevation / Ischemia", probability=0.02),
-                PredictionItem(label="Ventricular Tachycardia", probability=0.01)
+                PredictionItem(label="Normal Sinus Rhythm", probability=0.94),
+                PredictionItem(label="ST/T-Wave Change", probability=0.02),
+                PredictionItem(label="Conduction Disturbance", probability=0.02),
+                PredictionItem(label="Myocardial Infarction", probability=0.01),
+                PredictionItem(label="Cardiac Hypertrophy", probability=0.01)
             ]
             tier1 = "Lead II tracing exhibits regular P-Q-R-S-T complexes with uniform morphology, rate ~72 bpm, PR interval 155 ms."
             tier2 = "Normal Sinus Rhythm with physiological depolarization and repolarization intervals."
@@ -477,10 +499,29 @@ class ImagingCNNService:
                     max_prob  = pred_profile[0].probability
                     top_label = pred_profile[0].label
                     status = "uncertain" if (max_prob < threshold or is_uncertain) else "ok"
-                    heatmap_b64 = self._generate_mri_heatmap(center=(120, 100), radius=45, intensity=max_prob)
-                    tier1 = f"Axial MRI slice classified as: {top_label} (posterior probability {max_prob:.1%})."
-                    tier2 = f"DenseNet-121 (Brain Tumor MRI trained) confidence {max_prob:.1%} is {'above' if status == 'ok' else 'below'} diagnostic validation threshold ({threshold:.0%})."
-                    tier3 = "Correlate with clinical presentation, multi-sequence MRI, and board-certified neuroradiology review. AI screening output only."
+                    heatmap_b64 = self._compute_mri_gradcam(model, x) or self._generate_mri_heatmap(center=(120, 100), radius=45, intensity=max_prob)
+                    
+                    if "glioma" in top_label.lower():
+                        tier1 = f"Axial MRI slice demonstrates features indicative of infiltrative neuroepithelial neoplasm (posterior probability {max_prob:.1%})."
+                        tier2 = f"DenseNet-121 (Brain Tumor MRI trained) classification aligns with Glioma / High-Grade Neoplasm with {max_prob:.1%} confidence."
+                        tier3 = "Urgent neurosurgical consultation for stereotactic biopsy/surgical debulking; initiate edema management and follow up with multi-sequence contrast MRI."
+                    elif "meningioma" in top_label.lower():
+                        tier1 = f"Axial MRI slice demonstrates features indicative of extra-axial dural-based lesion (posterior probability {max_prob:.1%})."
+                        tier2 = f"DenseNet-121 (Brain Tumor MRI trained) classification aligns with Meningioma with {max_prob:.1%} confidence."
+                        tier3 = "Neurosurgical consultation for surgical planning vs. watchful surveillance; correlate with contrast enhancement, dural tail sign, and bone window CT."
+                    elif "pituitary" in top_label.lower():
+                        tier1 = f"Axial MRI slice demonstrates sellar/suprasellar lesion characteristics (posterior probability {max_prob:.1%})."
+                        tier2 = f"DenseNet-121 (Brain Tumor MRI trained) classification aligns with Pituitary Adenoma with {max_prob:.1%} confidence."
+                        tier3 = "Endocrine and neurosurgical evaluation; recommend visual field perimetry assessment and pituitary hormonal axis testing."
+                    elif "no tumor" in top_label.lower():
+                        tier1 = f"Axial MRI slice demonstrates symmetric cerebral parenchyma without focal space-occupying mass (posterior probability {max_prob:.1%})."
+                        tier2 = f"DenseNet-121 (Brain Tumor MRI trained) indicates no detectable brain tumor with {max_prob:.1%} confidence."
+                        tier3 = "No acute neuro-oncologic lesion identified on screening slice. Correlate with clinical neurology assessment and follow up as indicated."
+                    else:
+                        tier1 = f"Axial MRI slice classified as: {top_label} (posterior probability {max_prob:.1%})."
+                        tier2 = f"DenseNet-121 (Brain Tumor MRI trained) confidence {max_prob:.1%} is {'above' if status == 'ok' else 'below'} diagnostic validation threshold ({threshold:.0%})."
+                        tier3 = "Correlate with clinical presentation, multi-sequence MRI, and board-certified neuroradiology review. AI screening output only."
+
                     latency_ms = int((time.time() - start_time) * 1000)
                     return ImagingAnalysisResponse(
                         request_id=str(uuid.uuid4()),
@@ -512,32 +553,54 @@ class ImagingCNNService:
 
         if "glioma" in fname_lower or "mass" in fname_lower or "tumor" in fname_lower:
             pred_profile = [
-                PredictionItem(label="High-Grade Glioma / Neoplasm", probability=0.93),
-                PredictionItem(label="Acute Ischemic Infarct", probability=0.04),
-                PredictionItem(label="No Acute Intra-Axial Abnormality", probability=0.02),
-                PredictionItem(label="Intracranial Hemorrhage", probability=0.01)
+                PredictionItem(label="Glioma / High-Grade Neoplasm", probability=0.93),
+                PredictionItem(label="Meningioma", probability=0.04),
+                PredictionItem(label="No Tumor Detected", probability=0.02),
+                PredictionItem(label="Pituitary Adenoma", probability=0.01)
             ]
             tier1 = "Axial MRI slice demonstrates a 5.4 x 4.7 cm infiltrative right fronto-insular mass with heterogeneous T1 hypointensity, thick ring enhancement, and prominent vasogenic edema."
             tier2 = "Imaging features strongly correlate with a high-grade intra-axial neuroepithelial neoplasm (Glioblastoma WHO Grade 4 among leading differentials)."
             tier3 = "Urgent neurosurgical consultation for stereotactic biopsy/surgical debulking; initiate intravenous dexamethasone for mass effect."
             heatmap_b64 = self._generate_mri_heatmap(center=(135, 95), radius=45)
+        elif "meningioma" in fname_lower or "dural" in fname_lower:
+            pred_profile = [
+                PredictionItem(label="Meningioma", probability=0.91),
+                PredictionItem(label="Glioma / High-Grade Neoplasm", probability=0.05),
+                PredictionItem(label="No Tumor Detected", probability=0.03),
+                PredictionItem(label="Pituitary Adenoma", probability=0.01)
+            ]
+            tier1 = "Axial slice demonstrates well-circumscribed extra-axial dural-based enhancing mass with prominent dural tail."
+            tier2 = "Pattern corresponds to Meningioma."
+            tier3 = "Neurosurgical consultation for surgical planning vs. watchful surveillance."
+            heatmap_b64 = self._generate_mri_heatmap(center=(90, 80), radius=35)
+        elif "pituitary" in fname_lower or "sellar" in fname_lower:
+            pred_profile = [
+                PredictionItem(label="Pituitary Adenoma", probability=0.92),
+                PredictionItem(label="Meningioma", probability=0.04),
+                PredictionItem(label="Glioma / High-Grade Neoplasm", probability=0.03),
+                PredictionItem(label="No Tumor Detected", probability=0.01)
+            ]
+            tier1 = "Axial slice demonstrates sellar/suprasellar expansile lesion."
+            tier2 = "Pattern corresponds to Pituitary Adenoma."
+            tier3 = "Endocrine and neurosurgical evaluation; visual field perimetry assessment."
+            heatmap_b64 = self._generate_mri_heatmap(center=(112, 112), radius=30)
         elif "infarct" in fname_lower or "stroke" in fname_lower:
             pred_profile = [
-                PredictionItem(label="Acute Ischemic Infarct", probability=0.91),
-                PredictionItem(label="High-Grade Glioma / Neoplasm", probability=0.04),
-                PredictionItem(label="No Acute Intra-Axial Abnormality", probability=0.03),
-                PredictionItem(label="Intracranial Hemorrhage", probability=0.02)
+                PredictionItem(label="No Tumor Detected", probability=0.91),
+                PredictionItem(label="Glioma / High-Grade Neoplasm", probability=0.04),
+                PredictionItem(label="Meningioma", probability=0.03),
+                PredictionItem(label="Pituitary Adenoma", probability=0.02)
             ]
-            tier1 = "Restricted diffusion and cytotoxic edema in the right MCA cortical and subcortical territory with loss of insular gray-white differentiation."
-            tier2 = "Pattern corresponds to Acute Right MCA Territory Ischemic Infarct secondary to proximal vascular occlusion."
+            tier1 = "Restricted diffusion and cytotoxic edema in the right MCA cortical and subcortical territory with loss of insular gray-white differentiation. No neoplasm detected."
+            tier2 = "Non-neoplastic neurovascular finding; brain tumor screening negative for neoplastic mass."
             tier3 = "Time-critical neurovascular priority. Emergency stroke code activation, NIHSS assessment, and endovascular thrombectomy candidacy review."
             heatmap_b64 = self._generate_mri_heatmap(center=(145, 110), radius=50)
         elif is_uncertain:
             pred_profile = [
-                PredictionItem(label="High-Grade Glioma / Neoplasm", probability=0.45),
-                PredictionItem(label="Acute Ischemic Infarct", probability=0.38),
-                PredictionItem(label="No Acute Intra-Axial Abnormality", probability=0.10),
-                PredictionItem(label="Intracranial Hemorrhage", probability=0.07)
+                PredictionItem(label="Glioma / High-Grade Neoplasm", probability=0.45),
+                PredictionItem(label="Meningioma", probability=0.38),
+                PredictionItem(label="No Tumor Detected", probability=0.10),
+                PredictionItem(label="Pituitary Adenoma", probability=0.07)
             ]
             tier1 = "Severe motion artifact and phase-encoding ghosting across cerebral hemispheres limiting diagnostic parenchymal assessment."
             tier2 = "Equivocal diagnostic impression: highest class probability (0.45) is below clinical validation threshold (0.60)."
@@ -546,13 +609,13 @@ class ImagingCNNService:
         else:
             # Normal brain MRI
             pred_profile = [
-                PredictionItem(label="No Acute Intra-Axial Abnormality", probability=0.96),
-                PredictionItem(label="High-Grade Glioma / Neoplasm", probability=0.02),
-                PredictionItem(label="Acute Ischemic Infarct", probability=0.01),
-                PredictionItem(label="Intracranial Hemorrhage", probability=0.01)
+                PredictionItem(label="No Tumor Detected", probability=0.96),
+                PredictionItem(label="Glioma / High-Grade Neoplasm", probability=0.02),
+                PredictionItem(label="Meningioma", probability=0.01),
+                PredictionItem(label="Pituitary Adenoma", probability=0.01)
             ]
             tier1 = "Axial slice demonstrates symmetric ventricles, preserved cortical sulcal pattern, and clear gray-white matter boundaries without focal parenchymal signal alteration."
-            tier2 = "No evidence of acute intracranial hemorrhage, territorial infarction, or space-occupying lesion."
+            tier2 = "No evidence of intracranial space-occupying lesion or brain tumor."
             tier3 = "Unremarkable baseline neuro-imaging findings. Continue clinical follow-up based on presenting neurological symptoms."
             heatmap_b64 = self._generate_mri_heatmap(center=(112, 112), radius=20, intensity=0.1)
 
@@ -684,6 +747,64 @@ class ImagingCNNService:
             disclaimer="Research prototype; not a diagnosis. Rejected inputs must not be utilized for clinical triage."
         )
 
+    def _compute_mri_gradcam(self, model: Any, x: Any) -> Optional[str]:
+        """Dynamically computes Grad-CAM activation heatmap on MRIDenseNet121 convolutional features."""
+        try:
+            import torch
+            import torch.nn.functional as F
+
+            feats_holder = []
+            def hook_fn(module, input, output):
+                feats_holder.append(output)
+
+            features_module = getattr(model, "model", model)
+            if hasattr(features_module, "features"):
+                features_module = features_module.features
+            else:
+                return None
+
+            handle = features_module.register_forward_hook(hook_fn)
+            x_in = x.clone().detach().requires_grad_(True)
+            logits = model(x_in)
+            target_idx = logits.argmax(dim=1).item()
+            loss = logits[0, target_idx]
+            model.zero_grad()
+            grads = torch.autograd.grad(loss, feats_holder[0], retain_graph=False)[0]
+            handle.remove()
+
+            feats = feats_holder[0]
+            weights = grads.mean(dim=(2, 3), keepdim=True)
+            cam = (weights * feats).sum(dim=1, keepdim=True)
+            cam = F.relu(cam)
+            cam = F.interpolate(cam, size=(224, 224), mode="bilinear", align_corners=False)
+            cam_np = cam.squeeze().detach().cpu().numpy()
+
+            c_min, c_max = cam_np.min(), cam_np.max()
+            if c_max > c_min:
+                cam_np = (cam_np - c_min) / (c_max - c_min)
+            else:
+                cam_np = np.zeros_like(cam_np)
+
+            h, w = cam_np.shape
+            rgba = np.zeros((h, w, 4), dtype=np.uint8)
+            r = np.clip(np.where(cam_np >= 0.5, (cam_np - 0.5) * 4 * 255, 0), 0, 255).astype(np.uint8)
+            g = np.clip(np.where(cam_np < 0.25, cam_np * 4 * 255, np.where(cam_np < 0.75, 255, (1.0 - (cam_np - 0.75) * 4) * 200)), 0, 255).astype(np.uint8)
+            b = np.clip(np.where(cam_np < 0.25, 255, np.where(cam_np < 0.5, (1.0 - (cam_np - 0.25) * 4) * 255, 0)), 0, 255).astype(np.uint8)
+            alpha = np.clip(cam_np * 180, 0, 180).astype(np.uint8)
+
+            rgba[:, :, 0] = r
+            rgba[:, :, 1] = g
+            rgba[:, :, 2] = b
+            rgba[:, :, 3] = alpha
+
+            pil_img = Image.fromarray(rgba, mode="RGBA")
+            buf = io.BytesIO()
+            pil_img.save(buf, format="PNG")
+            return base64.b64encode(buf.getvalue()).decode("utf-8")
+        except Exception as e:
+            print(f"Error computing MRI Grad-CAM: {e}")
+            return None
+
     def _generate_mri_heatmap(self, center=(120, 100), radius=45, intensity=1.0, diffuse=False) -> str:
         """Generates a Grad-CAM activation heatmap PNG encoded as base64 string."""
         img = Image.new("RGBA", (224, 224), (0, 0, 0, 0))
@@ -715,6 +836,15 @@ class ImagingCNNService:
 
     def _generate_synthetic_mri_slice(self, pattern: str) -> Image.Image:
         """Creates a realistic synthetic axial T1-Gd brain slice image."""
+        if pattern == "normal":
+            img = Image.new("L", (224, 224), 0)
+            draw = ImageDraw.Draw(img)
+            draw.ellipse((25, 25, 199, 199), fill=180, outline=180)
+            draw.ellipse((35, 35, 189, 189), fill=30)
+            draw.ellipse((95, 90, 108, 134), fill=20)
+            draw.ellipse((116, 90, 129, 134), fill=20)
+            return img
+
         img = Image.new("L", (224, 224), 20)
         draw = ImageDraw.Draw(img)
 

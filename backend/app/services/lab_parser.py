@@ -211,6 +211,62 @@ class LabReportParser:
                 except Exception:
                     continue
 
+        # 3. Dynamic multi-line and tabular backfill
+        try:
+            from backend.app.services.universal_disease_service import extract_all_clinical_parameters_dynamic
+            dyn = extract_all_clinical_parameters_dynamic(text)
+            
+            mapping = [
+                ("creatinine", "creatinine", "Serum Creatinine", "Renal Function", "mg/dL", 0.6, 1.2, 1.5, "Elevated creatinine indicates impaired nephron waste filtration.", "Adequate glomerular filtration."),
+                ("egfr", "egfr", "Estimated GFR (eGFR)", "Renal Function", "mL/min/1.73m²", 60.0, 120.0, 45.0, "eGFR <60 indicates compromised renal filtration.", "Healthy renal filtration rate."),
+                ("glucose", "glucose", "Fasting Plasma Glucose", "Metabolic & Glycemic", "mg/dL", 70.0, 99.0, 125.0, "Elevated fasting blood sugar.", "Healthy fasting glycemic control."),
+                ("hba1c", "hba1c", "Glycated Hemoglobin (HbA1c)", "Metabolic & Glycemic", "%", 4.0, 5.6, 6.4, "Elevated HbA1c.", "Normal glycemic control."),
+                ("cholesterol", "cholesterol", "Total Serum Cholesterol", "Lipid Profile", "mg/dL", 125.0, 199.0, 240.0, "Elevated cholesterol.", "Desirable cholesterol limits."),
+                ("ldl", "ldl", "LDL Cholesterol", "Lipid Profile", "mg/dL", 50.0, 99.0, 160.0, "Elevated atherogenic LDL.", "Optimal low-density lipoprotein."),
+                ("hdl", "hdl", "HDL Cholesterol", "Lipid Profile", "mg/dL", 40.0, 80.0, 90.0, "Reduced cardioprotective HDL.", "Cardioprotective concentration."),
+                ("triglycerides", "triglycerides", "Serum Triglycerides", "Lipid Profile", "mg/dL", 50.0, 149.0, 200.0, "Elevated triglycerides.", "Normal neutral fat levels."),
+                ("bp_sys", "bp_systolic", "Systolic Blood Pressure", "Hemodynamics", "mmHg", 90.0, 120.0, 140.0, "Systolic BP elevation.", "Optimal systolic pressure."),
+                ("bp_dia", "bp_diastolic", "Diastolic Blood Pressure", "Hemodynamics", "mmHg", 60.0, 80.0, 90.0, "Diastolic BP elevation.", "Normal diastolic baseline."),
+                ("alt", "sgpt_alt", "ALT / SGPT (Liver Transaminase)", "Liver Function", "U/L", 7.0, 56.0, 80.0, "Elevated ALT reflects hepatocyte injury.", "Healthy hepatic enzyme level."),
+                ("ast", "sgot_ast", "AST / SGOT (Liver Transaminase)", "Liver Function", "U/L", 10.0, 40.0, 75.0, "Elevated AST reflects hepatocellular stress.", "Normal hepatic enzyme baseline."),
+                ("total_bilirubin", "total_bilirubin", "Total Bilirubin", "Liver Function", "mg/dL", 0.2, 1.2, 2.0, "Hyperbilirubinemia indicates impaired excretory clearance.", "Normal biliary excretion."),
+                ("direct_bilirubin", "direct_bilirubin", "Direct Bilirubin", "Liver Function", "mg/dL", 0.0, 0.3, 0.8, "Elevated conjugated bilirubin fraction.", "Normal conjugated bilirubin."),
+                ("alp", "alkaline_phosphotase", "Alkaline Phosphatase (ALP)", "Liver Function", "U/L", 44.0, 147.0, 200.0, "Elevated alkaline phosphatase / cholestatic pattern.", "Normal biliary enzyme levels."),
+                ("serum_albumin", "serum_albumin", "Serum Albumin", "Liver & Renal Function", "g/dL", 3.5, 5.0, 2.8, "Low serum albumin.", "Healthy serum albumin level.")
+            ]
+
+            for dyn_k, raw_k, name, cat, unit, low, high, crit, exp_h, exp_n in mapping:
+                if dyn_k in dyn and raw_k not in raw_values:
+                    val = float(dyn[dyn_k])
+                    raw_values[raw_k] = val
+                    if raw_k == "hdl":
+                        abn = "LOW" if val < 40.0 else "NORMAL"
+                    elif raw_k == "egfr":
+                        abn = "LOW" if val < 60.0 else "NORMAL"
+                    elif raw_k == "serum_albumin":
+                        abn = "LOW" if val < 3.5 else "NORMAL"
+                    else:
+                        abn = "CRITICAL" if val > crit else "ELEVATED" if val > high else "LOW" if val < low else "NORMAL"
+
+                    provenance_list.append(LabBiomarkerProvenance(
+                        key=raw_k,
+                        name=name,
+                        category=cat,
+                        raw_value=f"{val} {unit}",
+                        numeric_value=val,
+                        unit=unit,
+                        reference_range=f"{low} - {high} {unit}",
+                        reference_low=low,
+                        reference_high=high,
+                        abnormality=abn,
+                        source_section="LABORATORY MEASUREMENTS",
+                        source_text=f"{name}: {val} {unit}",
+                        confidence=0.98,
+                        clinical_interpretation=exp_h if abn in ["CRITICAL", "ELEVATED", "LOW"] else exp_n
+                    ))
+        except Exception:
+            pass
+
         return provenance_list, raw_values
 
 lab_parser = LabReportParser()

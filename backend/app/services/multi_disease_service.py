@@ -199,11 +199,13 @@ class MultiDiseaseService:
         ctx.log_event("ROUTING", "Routing to Cardiometabolic Multi-Organ Risk Ensembles.")
         biomarkers, raw = lab_parser.parse(text)
         
+        from backend.app.services.universal_disease_service import parse_patient_demographics
+        demo = parse_patient_demographics(text)
         patient = {
-            "name": "Aarav Mehta (Synthetic)",
-            "age": int(raw.get("age", 52)),
-            "gender": "Male",
-            "mrn": "RBH-DEMO-04721"
+            "name": demo.name if demo.name and "Clinical Patient" not in demo.name else "Aarav Mehta (Synthetic)",
+            "age": demo.age if demo.age else int(raw.get("age", 52)),
+            "gender": demo.gender if demo.gender and demo.gender != "Unspecified" else "Male",
+            "mrn": demo.mrn if demo.mrn and "PENDING" not in demo.mrn else "RBH-DEMO-04721"
         }
         ctx.patient_context = patient
 
@@ -318,6 +320,24 @@ class MultiDiseaseService:
 
         # Safe Clinical Follow-up Pathway
         follow_up = []
+        if creat_val > 1.3 or egfr_val < 60:
+            follow_up.append({
+                "title": "Nephrology Renal Function Review",
+                "action": f"Consult nephrologist for persistent renal filtration impairment (eGFR {egfr_val:.0f} mL/min, Creatinine {creat_val:.2f} mg/dL). Avoid NSAIDs and arrange repeat eGFR and uACR testing.",
+                "clinical_rationale": "Slows CKD progression and manages secondary metabolic complications.",
+                "priority": "HIGH_PRIORITY",
+                "requires_clinician": True,
+                "evidence_basis": [f"eGFR: {egfr_val:.0f} mL/min", f"Creatinine: {creat_val:.2f} mg/dL"]
+            })
+        if sgpt_val > 56 or sgot_val > 40 or raw.get("total_bilirubin", 0.8) > 1.2:
+            follow_up.append({
+                "title": "Hepatology / LFT Investigation",
+                "action": f"Review active transaminitis (ALT {sgpt_val:.0f} U/L, AST {sgot_val:.0f} U/L) with clinician. Schedule abdominal ultrasound and viral hepatitis serologies.",
+                "clinical_rationale": "Identifies reversible causes of hepatocellular injury and prevents fibrosis progression.",
+                "priority": "HIGH_PRIORITY",
+                "requires_clinician": True,
+                "evidence_basis": [f"ALT: {sgpt_val:.0f} U/L", f"AST: {sgot_val:.0f} U/L"]
+            })
         if bp_sys >= 130:
             follow_up.append({
                 "title": "Hypertension Clinical Review",
@@ -346,11 +366,23 @@ class MultiDiseaseService:
                 "evidence_basis": [f"HbA1c: {hba1c_val:.1f}%", f"Fasting Glucose: {fbs_val:.0f} mg/dL"]
             })
 
-        summary = (
-            f"Cardiometabolic Risk Screening: Elevated risk markers identified in Cardiovascular (Score: {assessments['heart']['model_score']}/100) "
-            f"and Type 2 Diabetes (Score: {assessments['diabetes']['model_score']}/100) pathways, driven by Stage 2 Hypertension ({bp_sys:.0f}/{bp_dia:.0f} mmHg), "
-            f"Atherogenic LDL ({raw.get('ldl', 158):.0f} mg/dL), and Pre-diabetic HbA1c ({hba1c_val:.1f}%). Renal (eGFR {egfr_val:.0f}) and Hepatic markers remain preserved."
-        )
+        high_risk_organs = []
+        if assessments["ckd"]["model_score"] >= 45 or egfr_val < 60 or creat_val > 1.3:
+            high_risk_organs.append(f"Renal / CKD (Score: {assessments['ckd']['model_score']}/100, eGFR {egfr_val:.0f} mL/min)")
+        if assessments["liver"]["model_score"] >= 45 or sgpt_val > 56 or sgot_val > 40:
+            high_risk_organs.append(f"Hepatic / Liver (Score: {assessments['liver']['model_score']}/100, ALT {sgpt_val:.0f} U/L)")
+        if assessments["heart"]["model_score"] >= 50 or bp_sys >= 140:
+            high_risk_organs.append(f"Cardiovascular (Score: {assessments['heart']['model_score']}/100, BP {bp_sys:.0f}/{bp_dia:.0f} mmHg)")
+        if assessments["diabetes"]["model_score"] >= 50 or hba1c_val >= 6.5:
+            high_risk_organs.append(f"Type 2 Diabetes (Score: {assessments['diabetes']['model_score']}/100, HbA1c {hba1c_val:.1f}%)")
+
+        if high_risk_organs:
+            summary = f"Multi-Organ Risk Screening: High clinical priority identified in {'; '.join(high_risk_organs)}."
+        else:
+            summary = (
+                f"Multi-Organ Risk Screening: Baseline metabolic profile for {patient['name']}. "
+                f"Renal (eGFR {egfr_val:.0f}), Hepatic (ALT {sgpt_val:.0f}), and Cardiovascular markers evaluated."
+            )
 
         confirmations = [
             "Repeat fasting lipid and plasma glucose verification within 3 months.",

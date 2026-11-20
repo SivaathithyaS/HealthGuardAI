@@ -268,13 +268,27 @@ class MultiDiseaseService:
         ckd_drivers = sorted(ckd_drivers, key=lambda x: abs(x["shap_value"]), reverse=True)[:4]
 
         # 4. Liver Model
-        sgpt_val = raw.get("sgpt_alt", 31.0)
-        sgot_val = raw.get("sgot_ast", 27.0)
+        sgpt_raw = raw.get("sgpt_alt", 31.0)
+        sgot_raw = raw.get("sgot_ast", 27.0)
+        tot_bili = raw.get("total_bilirubin", 0.8)
+        dir_bili = raw.get("direct_bilirubin", 0.2)
+        alp_val = raw.get("alkaline_phosphotase", 180.0)
+        alb_val = raw.get("serum_albumin", 4.0)
+
+        # Clamping to valid range for LiverFeatures schema
+        sgpt_val = max(5.0, min(2000.0, float(sgpt_raw)))
+        sgot_val = max(5.0, min(5000.0, float(sgot_raw)))
+        tot_bili = max(0.3, min(80.0, float(tot_bili)))
+        dir_bili = max(0.1, min(25.0, float(dir_bili)))
+        alp_val = max(50.0, min(2200.0, float(alp_val)))
+        alb_val = max(0.8, min(6.0, float(alb_val)))
+        ag_ratio = max(0.2, min(3.0, round(alb_val / 3.0, 1)))
+
         liver_f = LiverFeatures(
-            age=patient["age"], gender=1, total_bilirubin=0.8, direct_bilirubin=0.2,
-            alkaline_phosphotase=180.0, alamine_aminotransferase=sgpt_val,
-            aspartate_aminotransferase=sgot_val, total_protiens=7.0, albumin=4.0,
-            albumin_and_globulin_ratio=1.1
+            age=float(patient["age"]), gender=1, total_bilirubin=tot_bili, direct_bilirubin=dir_bili,
+            alkaline_phosphotase=alp_val, alamine_aminotransferase=sgpt_val,
+            aspartate_aminotransferase=sgot_val, total_protiens=7.0, albumin=alb_val,
+            albumin_and_globulin_ratio=ag_ratio
         )
         df_liv = pd.DataFrame([liver_f.model_dump()])[self.features["liver"]]
         liv_proba = float(self.models["liver"].predict_proba(df_liv)[0, 1])

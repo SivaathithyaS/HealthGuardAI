@@ -7,7 +7,7 @@ import {
   Stethoscope, Info, Minus, Sparkles, FileText, RotateCcw, Trash2
 } from 'lucide-react';
 
-const API_BASE = 'http://localhost:8000';
+import { API_BASE } from '../config';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers

@@ -8,8 +8,10 @@ import {
 import EcgWaveform from './EcgWaveform';
 import HeatmapOverlay from './HeatmapOverlay';
 
+import { API_BASE } from '../config';
+
 export default function ImagingView({ 
-  apiBase = 'http://localhost:8000',
+  apiBase = API_BASE,
   token = null,
   user = null,
   onScanComplete = null

@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import App from './App.jsx';
 import AuthPage from './components/AuthPage.jsx';
 
-const API_BASE = 'http://localhost:8000';
+import { API_BASE } from './config';
 
 /**
  * AuthGate

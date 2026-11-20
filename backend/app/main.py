@@ -52,6 +52,22 @@ def health_check():
         "version": "2.1.0"
     }
 
+# Serve built frontend Single Page Application (if present)
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+DIST_DIR = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+if DIST_DIR.is_dir() and (DIST_DIR / "index.html").is_file():
+    if (DIST_DIR / "assets").is_dir():
+        app.mount("/assets", StaticFiles(directory=str(DIST_DIR / "assets")), name="frontend_assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        candidate = DIST_DIR / full_path
+        if candidate.is_file():
+            return FileResponse(str(candidate))
+        return FileResponse(str(DIST_DIR / "index.html"))
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("backend.app.main:app", host="0.0.0.0", port=8000, reload=True)

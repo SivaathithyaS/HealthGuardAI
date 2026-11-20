@@ -16,7 +16,7 @@ import HealthHistory from './components/HealthHistory';
 import PresetCasesView from './components/PresetCasesView';
 import PatientMismatchModal from './components/PatientMismatchModal';
 
-const API_BASE = 'http://localhost:8000';
+import { API_BASE } from './config';
 
 export default function App({ user = null, token = null, onSignOut = null }) {
   const [activeTab, setActiveTab] = useState('universal');

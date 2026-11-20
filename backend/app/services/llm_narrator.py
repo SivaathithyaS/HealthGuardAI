@@ -297,6 +297,18 @@ def validate_narrative(narrative: dict, result: dict) -> List[str]:
     if "overall_assessment" not in narrative or narrative["overall_assessment"] is None:
         narrative["overall_assessment"] = ""
 
+    # Check common aliases for summary if missing
+    if "summary" not in narrative or not narrative["summary"]:
+        for alias in ("clinical_summary", "overall_summary", "narrative", "overview", "explanation", "description"):
+            if alias in narrative and narrative[alias]:
+                narrative["summary"] = str(narrative[alias])
+                break
+        else:
+            if narrative.get("overall_assessment"):
+                narrative["summary"] = str(narrative["overall_assessment"])
+            elif narrative.get("headline"):
+                narrative["summary"] = str(narrative["headline"])
+
     # Schema check
     required_keys = {"headline", "improved", "worsened", "unchanged", "summary", "caveats"}
     missing = required_keys - set(narrative.keys())
